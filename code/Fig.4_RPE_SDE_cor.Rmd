@@ -1,0 +1,92 @@
+---
+title: "Fig_RPE_SDE_correlation"
+output: github_document
+---
+
+Libraries:
+```{r}
+library(here)
+library(lme4)
+library(visreg)
+library(tidyverse)
+library(visreg)
+library(DHARMa)
+library(ggplot2)
+library(scales)
+
+theme_set(theme_minimal())
+```
+
+Read data:
+
+```{r}
+plant.eff <- readRDS(here("data/Effectiveness_plants.rds"))
+```
+
+Calculate median values of RPE and SDE per plant (to later plot one point per plant)
+```{r}
+plant.eff.sum <- plant.eff %>%
+  group_by(id_plant) %>%
+  summarise(median.sde=median(plant_sde), median.rpe=median(plant_rpe))
+```
+
+Extract different plant traits to reflect on the point size and color
+```{r}
+effect <- readRDS(here("data/effectiveness.rds"))
+
+#Area, initial crop size, Median pulp and Median Fruit quality
+plant_traits <- effect %>% group_by(id_plant) %>% 
+  summarise(pulp=median(pulp_weight), initcrop=first(initcrop),
+            fruit.qlc=median(p.reward),
+            area=median(area_new), bird_diversity=length(unique(bird_sp)))
+
+#Merge all "point" traits
+plant.eff.sum2 <- plant.eff.sum %>% left_join(plant_traits) %>% filter(!is.na(pulp))
+```
+
+
+Calculate Confidence Interval for the 1000 slopes.
+
+1st. Read slopes data (one slopes for each of the 1000 posterior distributions probability - "pdp")
+```{r}
+effcor <- readRDS(here("data/Effectiveness_correlation_slopes.rds"))
+effcor.predict <- readRDS(here("data/Effectiveness_correlation_slope_CI.rds"))
+```
+
+2nd. Calculate CI
+```{r}
+CI <- effcor.predict %>% pivot_longer(names_to="pdp", cols=c(y1:y1000)) %>%
+  mutate(x=as.factor(x)) %>%
+  group_by(x) %>%
+  summarise(ymin=min(value), ymax=max(value),
+            ymin.90=quantile(value, probs=.05), ymax.90=quantile(value, probs=.95), 
+            ymin.50=quantile(value, probs=.25), ymax.50=quantile(value, probs=.75)) %>%
+  mutate(x=as.numeric(as.character(x)))
+```
+
+PLOT where point color reflects bird biodiversity
+```{r, fig.width=10, fig.height=6}
+ggplot(data=plant.eff.sum2, aes(x=log(median.rpe), y=log(median.sde), size=initcrop, fill=bird_diversity)) +
+  labs(x="Plant reward: total energetic supply (kJ)", y="Animal reward: total seedlings recruited") +
+  geom_ribbon(inherit.aes=F, data=CI, aes(x=x, ymax=ymax.50, ymin=ymin.50), fill="grey50", alpha=0.4) +
+  geom_abline(intercept=mean(effcor$`(Intercept)`), slope=mean(effcor$`log(plant_rpe)`),
+              color="grey50") +
+  geom_point(color="grey")+
+  geom_point(pch=21, color="white") +
+  scale_fill_gradient(low="#ffeda0", high="#e34a33") +
+  scale_size_continuous(name="Crop size", range = c(2, 9), breaks = c(1000, 10000, 50000, 100000), 
+                        labels = function(x) format(x, scientific = F)) +
+  #theme(legend.position = c(0.90, 0.2)) + 
+  #theme(legend.position = "bottom") + 
+  scale_x_continuous(limits=c(log(5), log(10000)),
+                     breaks=c(0, log(1), log(10), log(100), log(1000), log(10000)),
+                     labels = function(x) format(exp(x))) +
+  scale_y_continuous(limits=c(log(0.0001), log(10)),
+                     breaks=c(0, log(0.0001), log(0.001), log(0.01), log(0.1), log(1), log(10)),
+                     labels = function(x) format(exp(x), scientific=F)) +
+  labs(caption="Axes in log scale.
+       Shaded area shows 50% CI for slope")
+
+#ggsave(filename=here("manuscript/figures/Fig.4_RPE_SDE_cor_plant.pdf"), width=10, height=6)
+```
+

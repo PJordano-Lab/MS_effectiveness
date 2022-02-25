@@ -1,0 +1,116 @@
+---
+title: "Calculate Effectiveness aggregating by individual plants"
+author: "Elena Quintero"
+output: github_document
+---
+
+```{r, warning=F, message=F}
+library(here)
+library(tidyverse)
+library(tidylog)
+```
+
+List of non-legitimate seed dispersers:
+```{r}
+nld <- c("Chloris chloris", "Cyanistes caeruleus", "Fringilla coelebs","Parus major",
+                    "Pyrrhula pyrrhula","Coccothraustes coccothraustes", "Columba palumbus")
+```
+
+Read data:
+
+I remove the rows for plant 371 which is missing fruit quality.
+Also I categorize birds in most common interactions.
+```{r}
+effect <- readRDS(here("data/effectiveness.rds"))
+
+effect_clean <- effect %>% drop_na(fruit.reward) %>%
+  mutate(bird_agg=ifelse(bird_sp %in% c("Chloris chloris","Erithacus rubecula",
+                                        "Sylvia melanocephala", "Sylvia atricapilla",
+                                        "Turdus merula"), bird_sp, "Other species")) 
+```
+
+```{r}
+plant_crop <- effect %>% group_by(id_plant) %>% summarise(crop=first(initcrop))
+```
+
+## CALCULATE SDE and RPE EFFECTIVENESS for INDIVIDUAL PLANT
+
+I want to get the total SDE and RPE that individual plants get and offer, to calculate the reciprocity for all the distribution data. So we have 1000 posterior distribution probabilities for each plant. Each of this 1000 posterior distribution probabilities I will call "pdp".
+
+1. Calculate total SDE for each plant in each "pdp"
+```{r}
+sde_effect_wide_plant <- effect_clean %>%
+  select(bird_sp, id_plant, sde) %>%
+  pivot_wider(names_from = bird_sp, values_from = sde) %>%
+  tidyr::unnest() %>%
+  rowwise() %>%
+  mutate(sde.plant.1.pdp = sum(c_across(`Chloris chloris`:`Coccothraustes coccothraustes`), na.rm=T))
+```
+
+2. I need to calculate total RPE offered by individual plants per "pdp"
+```{r}
+rpe_effect_wide_plant <- effect_clean %>%
+  select(bird_sp, id_plant, rpe) %>%
+  pivot_wider(names_from = bird_sp, values_from = rpe) %>%
+  tidyr::unnest() %>%
+  rowwise() %>%
+  mutate(rpe.plant.1.pdp = sum(c_across(`Chloris chloris`:`Coccothraustes coccothraustes`), na.rm=T)) %>%
+  rename(id_plant1=id_plant)
+```
+
+Now, I combine both datasets (total SDE and RPE per plant per "pdp"), and give a number to each "pdp".
+```{r}
+plant.eff <- cbind(sde_effect_wide_plant, rpe_effect_wide_plant) %>% 
+  select(id_plant, plant_sde=sde.plant.1.pdp, plant_rpe=rpe.plant.1.pdp)
+pdp = rep(1:1000, 79)
+plant.eff <- cbind(pdp,plant.eff)
+
+write_rds(plant.eff, here("data/Effectiveness_plants.rds"))
+
+#plant.eff <- readRDS(here("data/Effectiveness_plants.rds"))
+```
+
+## REPEAT REMOVING NON-LEGITIMATE SEED DISPERSERS
+
+```{r}
+effect_clean <- effect %>% drop_na(fruit.reward) %>%
+  filter(!bird_sp %in% nld) %>%
+  mutate(bird_agg=ifelse(bird_sp %in% c("Chloris chloris","Erithacus rubecula",
+                                        "Sylvia melanocephala", "Sylvia atricapilla",
+                                        "Turdus merula"), bird_sp, "Other species")) 
+```
+
+1. Calculate total SDE for each plant for each "pdp"
+```{r}
+sde_effect_wide_plant <- effect_clean %>%
+  select(bird_sp, id_plant, sde) %>%
+  pivot_wider(names_from = bird_sp, values_from = sde) %>%
+  tidyr::unnest() %>%
+  rowwise() %>%
+  mutate(sde.plant.1.pdp = sum(c_across(`Erithacus rubecula`:`Sylvia cantillans`), na.rm=T))
+```
+
+2. I need to calculate total RPE offered by individual plants per "pdp"
+```{r}
+rpe_effect_wide_plant <- effect_clean %>%
+  select(bird_sp, id_plant, rpe) %>%
+  pivot_wider(names_from = bird_sp, values_from = rpe) %>%
+  tidyr::unnest() %>%
+  rowwise() %>%
+  mutate(rpe.plant.1.pdp = sum(c_across(`Erithacus rubecula`:`Sylvia cantillans`), na.rm=T)) %>%
+  rename(id_plant1=id_plant)
+```
+
+Now, I combine both datasets (total SDE and RPE per plant per "pdp"), and give a number to each "pdp".
+```{r}
+plant.eff <- cbind(sde_effect_wide_plant, rpe_effect_wide_plant) %>% 
+  select(id_plant, plant_sde=sde.plant.1.pdp, plant_rpe=rpe.plant.1.pdp)
+pdp = rep(1:1000, 79)
+plant.eff <- cbind(pdp,plant.eff)
+
+write_rds(plant.eff, here("data/Effectiveness_plants_no_pred.rds"))
+
+#plant.eff.sd <- readRDS(here("data/Effectiveness_plants_no_pred.rds"))
+```
+
+

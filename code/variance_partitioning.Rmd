@@ -1,0 +1,98 @@
+---
+title: "Contribution of Quantity and Quality components to the variation of effectiveness"
+output: github_document
+---
+
+```{r, warning=F, message=F}
+library(here)
+library(tidyverse)
+```
+
+Read data (n=1000 values per interaction, i.e., posteriors):
+```{r}
+eff <- readRDS(here("data/effectiveness.rds")) %>%
+  mutate(qty.fru.manipulated=as.numeric(qty.fru.manipulated)) %>% filter(!is.na(fruit.reward))
+```
+
+Remove non-legitimate dispersers for calculating variance in SDE
+```{r}
+non.disp <- c("Chloris chloris", "Cyanistes caeruleus", "Fringilla coelebs","Parus major",
+                    "Pyrrhula pyrrhula","Coccothraustes coccothraustes", "Columba palumbus")
+
+eff.sd <- eff %>% filter(!bird_sp %in% non.disp) 
+```
+
+### Component distribution:
+```{r, include=F}
+summary(eff$qty.fru.consumed) #RPE-QTC
+summary(eff$fruit.reward) #RPE-QLC
+summary(eff$qty.fru.manipulated) #SDE-QTC
+summary(eff$sde.qlc) #SDE-QLC
+```
+
+
+### Linear models and variance partitioning
+
+**For RPE:**
+
+Full model, where R-squared is 1
+```{r}
+m1 <- lm(log(rpe) ~ log(qty.fru.consumed) + log(fruit.reward), data=eff)
+summary(m1)
+```
+
+RPE~QTC model
+```{r}
+m2 <- lm(log(rpe) ~ log(qty.fru.consumed), data=eff)
+m2.sum <- summary(m2)
+m2.sum
+```
+
+RPE~QLC model
+```{r}
+m3 <- lm(log(rpe) ~ log(fruit.reward), data=eff)
+m3.sum <- summary(m3)
+m3.sum
+```
+
+Normalise values to add up to 100%:
+```{r}
+#Quantity
+m2.sum$r.squared / sum(m2.sum$r.squared, m3.sum$r.squared)
+
+#Quality
+m3.sum$r.squared / sum(m2.sum$r.squared, m3.sum$r.squared)
+```
+
+
+**For SDE:**
+
+Full model, where R-squared is 1
+```{r}
+m4 <- lm(log(sde) ~ log(qty.fru.manipulated) + log(sde.qlc), data=eff.sd)
+summary(m4)
+```
+
+SDE~QTC model
+```{r}
+m5 <- lm(log(sde) ~ log(qty.fru.manipulated), data=eff.sd)
+m5.sum <- summary(m5)
+m5.sum
+```
+
+SDE~QLC model
+```{r}
+m6 <- lm(log(sde) ~ log(sde.qlc), data=eff.sd)
+m6.sum <- summary(m6)
+m6.sum
+```
+
+Normalise values to add up to 100%:
+```{r}
+#Quantity
+m5.sum$r.squared / sum(m5.sum$r.squared, m6.sum$r.squared)
+
+#Quality
+m6.sum$r.squared / sum(m5.sum$r.squared, m6.sum$r.squared)
+```
+

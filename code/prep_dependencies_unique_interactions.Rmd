@@ -1,0 +1,77 @@
+---
+title: "Calculate Dependencies and Asymmetry for distribution data"
+author: "Elena Quintero"
+output: github_document
+---
+
+```{r, warning=F, message=F}
+library(here)
+library(tidyverse)
+library(tidylog)
+```
+
+Read data:
+```{r}
+effect <- readRDS(here("data/effectiveness.rds"))
+```
+
+I remove the rows for plant 371 which is missing fruit quality.
+Also I categorize birds in most common interactions.
+```{r}
+effect_clean <- effect %>% drop_na(fruit.reward) %>%
+  mutate(bird_agg=ifelse(bird_sp %in% c("Chloris chloris","Erithacus rubecula","Sylvia melanocephala",
+                                        "Sylvia atricapilla","Turdus merula"), bird_sp, "Other species")) 
+```
+
+## CALCULATE DEPENDENCIES FOR ASYMMETRY
+
+In order to calculate dependencies, we need to calculate the total SDE and RPE for an individual plant or animal species, so we can then relate the specific weight (dependency) of one individual/species in respect with the total number of partners that specific plant/animal interacts with.
+
+1. Calculate total SDE for each **plant** in each "pdp" (i.e. posterior distribution probability from Bayes)
+```{r}
+sde_effect_wide <- effect_clean %>%
+  select(bird_sp, id_plant, sde) %>%
+  pivot_wider(names_from = bird_sp, values_from = sde) %>%
+  tidyr::unnest() %>%
+  rowwise() %>%
+  mutate(sde.plant.1.pdp = sum(c_across(`Chloris chloris`:`Coccothraustes coccothraustes`), na.rm=T)) #Calculate plant's total SDE summing SDE provided by each bird sp
+
+sde.long <- sde_effect_wide %>%
+  pivot_longer(cols=c(`Chloris chloris`:`Coccothraustes coccothraustes`),
+               names_to="bird_sp", values_to="sde.eff") %>%
+  mutate(sde.dep=sde.eff/sde.plant.1.pdp) %>% arrange(id_plant, bird_sp)
+```
+
+2. Calculate total RPE for each **animal** for each "pdp"
+```{r}
+rpe_effect_wide <- effect_clean %>%
+  select(bird_sp, id_plant, rpe) %>%
+  pivot_wider(names_from = id_plant, values_from = rpe) %>%
+  tidyr::unnest() %>%
+  rowwise() %>%
+  mutate(rpe.animal.1.pdp = sum(c_across(`301`:`383`), na.rm=T))
+
+rpe.long <- rpe_effect_wide %>%
+  pivot_longer(cols=c(`301`:`383`), names_to="id_plant", values_to="rpe.eff") %>%
+  mutate(rpe.dep=rpe.eff/rpe.animal.1.pdp) %>% arrange(id_plant, bird_sp)
+```
+
+3. Calculate asymmetry in dependence for each unique interaction (n=1000 values per unique interaction)
+```{r}
+dep <- cbind(rpe.long, sde.long[,c("sde.plant.1.pdp", "sde.eff", "sde.dep")]) %>%
+  group_by(id_plant, bird_sp) %>%
+  mutate(asy.num = sde.dep-rpe.dep) %>%
+  filter(!is.na(asy.num)) %>%
+  rowwise() %>%
+  mutate(asy.denom = max(sde.dep, rpe.dep, na.rm = T)) %>%
+  mutate(asymmetry = asy.num/asy.denom)
+
+pdp = rep(1:1000, 525) #name a unique identifier to each "pdp" 
+dep <- cbind(pdp, dep)
+
+write_rds(dep, here("data/Dependency_distribution.rds"))
+
+# dep <- readRDS(here("data/Dependency_distribution.rds"))
+```
+
+

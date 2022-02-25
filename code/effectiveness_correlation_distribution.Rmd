@@ -1,0 +1,281 @@
+---
+title: "Effectiveness correlation distribution"
+author: "Elena Quintero"
+output: github_document
+---
+```{r, warning=F, message=F}
+library(here)
+library(tidyverse)
+library(tidylog)
+library(ggplot2)
+library(RColorBrewer)
+library(ggdist)
+library(plotly)
+library(ggpubr)
+library(lme4)
+library(visreg)
+library(DHARMa)
+
+theme_set(theme_minimal())
+```
+
+Read data:
+```{r}
+plant.eff <- readRDS(here("data/Effectiveness_plants.rds"))
+plant.eff.sd <- readRDS(here("data/Effectiveness_plants_no_pred.rds"))
+```
+
+Also plant crop that will be used for point size
+```{r}
+plant_crop <- readRDS(here("data/effectiveness.rds")) %>% group_by(id_plant) %>%
+  summarise(crop=first(initcrop))
+```
+
+Calculate median values of RPE and SDE per plant (to later plot one point per plant)
+```{r}
+plant.eff.sum <- plant.eff %>%
+  group_by(id_plant) %>%
+  summarise(median.sde=median(plant_sde), median.rpe=median(plant_rpe)) %>%
+  left_join(plant_crop)
+
+plant.eff.sum.sd <- plant.eff.sd %>%
+  group_by(id_plant) %>%
+  summarise(median.sde=median(plant_sde), median.rpe=median(plant_rpe)) %>%
+  left_join(plant_crop)
+```
+
+
+## Calculate RPE~SDE model for each of the 1000 posterior distributions
+
+I create 2 data frames, one that will contain the 1000 slopes and the intercepts, and other that will contain the observed median "x values (i.e. median.rpe value for each plant, n=79) and the predicted "y" value for each of the 1000 model.
+
+I will call "pdp" each posterior probability rendered using bayes
+```{r}
+effcor <- data.frame()
+effcor.predict <- data.frame(x=log(plant.eff.sum$median.rpe))
+pdp=c(1:1000)
+
+for (i in 1:1000){ 
+  plant.eff.pdp <- plant.eff %>% filter(pdp == pdp[[i]]) 
+  model <- lm(log(plant_sde)~log(plant_rpe), data=plant.eff.pdp)
+  a <- cbind(pdp = pdp[[i]], t(model$coefficients))
+  effcor <- rbind(effcor, a)
+  y <- log(plant.eff.sum$median.rpe)*model$coefficients[2]+model$coefficients[1]
+  y <- as.data.frame(y)
+  names(y)[1] <- paste0("y",pdp[[i]])
+  effcor.predict <- cbind(effcor.predict, y)
+}
+```
+
+Summary of the last model (repetition number = 1000) 
+```{r}
+summary(model)
+simulateResiduals(fittedModel = model, plot = T)
+visreg(model)
+```
+
+Slope distribution:
+```{r}
+hist(effcor$`log(plant_rpe)`)
+```
+
+Mean slope and mean intercept:
+```{r}
+mean(effcor$`log(plant_rpe)`)
+mean(effcor$`(Intercept)`)
+```
+
+The mean slope "0.834" is and mean intercept is "-7.48"
+
+```{r}
+write_rds(effcor, here("data/Effectiveness_correlation_slopes.rds"))
+write_rds(effcor.predict, here("data/Effectiveness_correlation_slope_CI.rds"))
+```
+
+```{r}
+# effcor <- readRDS(here("data/Effectiveness_correlation_slopes.rds"))
+# effcor.predict <- readRDS(here("data/Effectiveness_correlation_slope_CI.rds"))
+```
+
+
+Plot all 1000 posterior results ("pdps") per plant (i.e. n points= 79000) and slopes:
+```{r}
+ggplot(plant.eff, aes(x=log(plant_rpe), y=log(plant_sde))) + 
+  #ggplot(subset(plant.eff, id_plant=="376"), aes(x=log(plant_rpe), y=log(plant_sde))) + 
+  geom_point(fill="#023858", pch=21, color="white") +
+  labs(x="Fruit energetic supply (Plant reward)", y="Seedlings recruited (Animal reward)") +
+  geom_abline(data=effcor, aes(slope=`log(plant_rpe)`, intercept=`(Intercept)`), 
+              alpha=0.1, color="grey30") +
+  geom_abline(intercept=mean(effcor$`(Intercept)`), slope=mean(effcor$`log(plant_rpe)`),
+              color="#023858", size=1.3) +
+  labs(x="Plant reward: total energetic supply (kJ)", y="Animal reward: total seedlings recruited") +
+  scale_x_continuous(limits=c(log(0.01), log(100000)),
+                     breaks=c(0, log(0.01), log(0.1), log(1), log(10), log(100), log(1000), 
+                              log(10000), log(100000)),
+                     labels = function(x) format(exp(x))) +
+  scale_y_continuous(limits=c(log(0.00001), log(100)),
+                     breaks=c(0, log(0.00001), log(0.0001), log(0.001), log(0.01), log(0.1), 
+                              log(1), log(10), log(100)),
+                     labels = function(x) format(exp(x), scientific=F))
+
+#ggsave(filename=here("manuscript/figures/Fig.SG.1_RPE_SDE_cor_distribution.pdf"), width=10, height=6)
+```
+
+Calculate Confidence Interval 100% and 90% for the 1000 slopes
+```{r}
+CI <- effcor.predict %>% pivot_longer(names_to="pdp", cols=c(y1:y1000)) %>%
+  mutate(x=as.factor(x)) %>%
+  group_by(x) %>%
+  summarise(ymin=min(value), ymax=max(value),
+            ymin.90=quantile(value, probs=.05), ymax.90=quantile(value, probs=.95)) %>%
+  mutate(x=as.numeric(as.character(x)))
+
+ggplot(CI, aes(x=x)) + geom_ribbon(aes(ymax=ymax, ymin=ymin), color="red", fill="red", alpha=0.4) +
+  geom_ribbon(aes(ymax=ymax.90, ymin=ymin.90), color="blue", fill="blue", alpha=0.4)
+```
+
+```{r}
+ggplot(data=plant.eff.sum, aes(x=log(median.rpe), y=log(median.sde), size=crop)) + 
+  labs(x="Fruit energetic supply (Plant reward)", y="Seedlings recruited (Animal reward)") +
+  theme(legend.position = "bottom") + 
+  geom_ribbon(inherit.aes=F, data=CI, aes(x=x, ymax=ymax.90, ymin=ymin.90), fill="grey50", alpha=0.4) +
+  geom_abline(intercept=mean(effcor$`(Intercept)`), slope=mean(effcor$`log(plant_rpe)`),
+              color="grey50") +
+  geom_point(fill="grey40", pch=21, color="white") +
+  scale_size_continuous(range = c(2, 8)) +
+  scale_x_continuous(limits=c(log(5), log(10000)),
+                     breaks=c(0, log(1), log(10), log(100), log(1000), log(10000)),
+                     labels = function(x) format(exp(x))) +
+  scale_y_continuous(limits=c(log(0.0001), log(100)),
+                     breaks=c(0, log(0.001), log(0.01), log(0.1), log(1), log(10)),
+                     labels = function(x) format(exp(x), scientific=F)) +
+  labs(caption="Shaded area shows 90% CI for slope")
+```
+
+
+#### SAME PROCCESS BUT REMOVING SEED PREDATORS
+```{r}
+effcor.sd <- data.frame()
+effcor.predict.sd <- data.frame(x=log(plant.eff.sum.sd$median.rpe))
+pdp=c(1:1000)
+
+for (i in 1:1000){ 
+  plant.eff.pdp <- plant.eff.sd %>% filter(pdp == pdp[[i]]) 
+  model.sd <- lm(log(plant_sde)~log(plant_rpe), data=plant.eff.pdp)
+  a <- cbind(pdp = pdp[[i]], t(model.sd$coefficients))
+  effcor.sd <- rbind(effcor.sd, a)
+  y <- log(plant.eff.sum.sd$median.rpe)*model.sd$coefficients[2]+model.sd$coefficients[1]
+  y <- as.data.frame(y)
+  names(y)[1] <- paste0("y",pdp[[i]])
+  effcor.predict.sd <- cbind(effcor.predict.sd, y)
+}
+```
+
+
+Summary of the last model (repetition number 1000) and slope distribution
+```{r}
+summary(model.sd)
+visreg(model.sd)
+hist(effcor.sd$`log(plant_rpe)`)
+```
+Now the slope distribution is more normal?
+
+```{r}
+mean(effcor.sd$`log(plant_rpe)`)
+mean(effcor.sd$`(Intercept)`)
+```
+The mean slope is very similar "0.850" (even bit higher) but the mean intercept is lower "-7.22"
+
+```{r}
+write_rds(effcor.sd, here("data/Effectiveness_correlation_slopes_sd.rds"))
+write_rds(effcor.predict.sd, here("data/Effectiveness_correlation_slope_CI_sd.rds"))
+```
+
+Calculate Confidence Interval 90% for the 1000 slopes
+```{r}
+CI.sd <- effcor.predict.sd %>% pivot_longer(names_to="pdp", cols=c(y1:y1000)) %>%
+  mutate(x=as.factor(x)) %>%
+  group_by(x) %>%
+  summarise(ymin=min(value), ymax=max(value),
+            ymin.90=quantile(value, probs=.05), ymax.90=quantile(value, probs=.95)) %>%
+  mutate(x=as.numeric(as.character(x)))
+# 
+# ggplot(CI.sd, aes(x=x)) + geom_ribbon(aes(ymax=ymax, ymin=ymin), color="red", fill="red", alpha=0.4) +
+#   geom_ribbon(aes(ymax=ymax.90, ymin=ymin.90), color="blue", fill="blue", alpha=0.4)
+```
+
+```{r}
+ggplot(data=plant.eff.sum.sd, aes(x=log(median.rpe), y=log(median.sde), size=crop)) + 
+  labs(x="Fruit energetic supply (Plant reward)", y="Seedlings recruited (Animal reward)") +
+  theme(legend.position = "bottom") + 
+  geom_ribbon(inherit.aes=F, data=CI.sd, aes(x=x, ymax=ymax.90, ymin=ymin.90), fill="grey50", alpha=0.4) +
+  geom_abline(intercept=mean(effcor.sd$`(Intercept)`), slope=mean(effcor.sd$`log(plant_rpe)`),
+              color="grey50") +
+  geom_point(fill="grey40", pch=21, color="white") +
+  scale_size_continuous(range = c(2, 8)) +
+  scale_x_continuous(limits=c(log(5), log(10000)),
+                     breaks=c(0, log(1), log(10), log(100), log(1000), log(10000)),
+                     labels = function(x) format(exp(x))) +
+  scale_y_continuous(limits=c(log(0.0001), log(100)),
+                     breaks=c(0, log(0.001), log(0.01), log(0.1), log(1), log(10)),
+                     labels = function(x) format(exp(x), scientific=F)) +
+  labs(caption="Shaded area shows 90% CI for slope
+       Note: Seed Predators removed")
+```
+
+
+
+**Compare graphs with and without seed predators**
+```{r}
+ggplot(data=plant.eff.sum, aes(x=log(median.rpe), y=log(median.sde), size=crop)) + 
+  labs(x="Fruit energetic supply (Plant reward)", y="Seedlings recruited (Animal reward)") +
+  theme(legend.position = "none") + 
+  geom_abline(intercept=mean(effcor$`(Intercept)`), slope=mean(effcor$`log(plant_rpe)`),
+              color="grey20") +
+  geom_point(fill="grey40", pch=21, color="white") +
+  geom_abline(data=plant.eff.sum.sd, aes(x=log(median.rpe), y=log(median.sde)), 
+              intercept=mean(effcor.sd$`(Intercept)`), slope=mean(effcor.sd$`log(plant_rpe)`),
+              color="royal blue") + 
+  geom_point(data=plant.eff.sum.sd, aes(x=log(median.rpe), y=log(median.sde), size=crop),
+             fill="light blue", pch=21, color="white") +
+  scale_size_continuous(range = c(2, 8)) +
+  scale_x_continuous(limits=c(log(5), log(10000)),
+                     breaks=c(0, log(1), log(10), log(100), log(1000), log(10000)),
+                     labels = function(x) format(exp(x))) +
+  scale_y_continuous(limits=c(log(0.0001), log(100)),
+                     breaks=c(0, log(0.001), log(0.01), log(0.1), log(1), log(10)),
+                     labels = function(x) format(exp(x), scientific=F)) +
+  labs(caption="Shaded area shows 90% CI for slope
+       Note: Seed Predators removed in blue")
+```
+
+```{r}
+a <- plant.eff.sum %>% mutate(type="all")
+b <- plant.eff.sum.sd %>% mutate(type="only_sd") 
+merged <- rbind(a,b)
+
+ggplot(merged, aes(x=log(median.rpe), y=log(median.sde), group=id_plant, color=type)) + 
+  labs(x="Fruit energetic supply (Plant reward)", y="Seedlings recruited (Animal reward)") +
+  geom_point() + geom_line() + scale_color_manual(values=c("grey20","light blue")) + 
+  theme(legend.position = "bottom")
+```
+
+The seedlings recruited do not really change, but the offered fruit energy increases because predators are consuming and not giving anything.
+
+
+## CORRELATION COEFFICIENTS
+```{r}
+cor <- data.frame()
+pdp=c(1:1000)
+
+for (i in 1:1000){ 
+  plant.eff.pdp <- plant.eff %>% filter(pdp == pdp[[i]]) 
+  model <- cor.test(log(plant.eff.pdp$plant_rpe), log(plant.eff.pdp$plant_sde))
+  a <- cbind(pdp = pdp[[i]], cor=model$estimate, CI=t(model$conf.int))
+  cor <- rbind(cor, a)
+}
+
+mean(cor$cor)
+mean(cor$V3)
+mean(cor$V4)
+```

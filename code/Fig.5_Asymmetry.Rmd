@@ -1,0 +1,137 @@
+---
+title: "Figure 5. Dependence and Asymmetry"
+output: github_document
+---
+
+```{r}
+library(here)
+library(tidyverse)
+library(ggplot2)
+library(patchwork)
+```
+
+Load data:
+```{r}
+dep <- readRDS(here("data/Dependency_distribution.rds"))
+```
+
+Summarise data:
+```{r}
+eff.dep.sum <- dep %>% group_by(id_plant, bird_sp) %>%
+  summarise(rpe.animal=median(rpe.animal.1.pdp), sde.plant=median(sde.plant.1.pdp),
+            rpe=median(rpe.eff), sde=median(sde.eff),
+            animal.dep=median(rpe.dep), plant.dep=median(sde.dep),
+            asymmetry=median(asymmetry))
+```
+
+Shorten bird species names:
+```{r}
+eff.dep.sum <- eff.dep.sum %>% 
+  separate(bird_sp, into = c("genus", "sp"), remove = FALSE) %>% 
+  mutate(bird_sp_short = paste0(str_sub(genus, end = 1), ".", str_sub(sp, end = 3))) %>% 
+  mutate(bird_sp_short = ifelse(bird_sp_short == "NA.NA", NA, bird_sp_short)) %>% 
+  select(-genus, -sp) %>% 
+  relocate(bird_sp_short, .after = bird_sp)
+```
+
+
+List of non-legitimate dispersers:
+```{r}
+nld <- c("C.chl", "C.cae", "F.coe", "P.maj", "P.pyr","C.coc", "C.pal")
+```
+
+Get a list of plant and animal in desired order for the matrix (first legitimate dispersers and then nld; orderd by the total effectiveness):
+```{r}
+animal <- eff.dep.sum %>% group_by(bird_sp_short) %>% summarise(order=median(rpe.animal)) %>% 
+  mutate(nld=ifelse(bird_sp_short %in% nld, "yes", "no")) %>%
+  arrange(desc(order)) %>% arrange(nld)
+
+plant <- eff.dep.sum %>% group_by(id_plant) %>% summarise(order=sum(sde.plant)) %>% 
+  arrange(order)
+```
+
+Specify order of animal and plants in dataset:
+```{r}
+hm.eff.dep <- eff.dep.sum %>% 
+  mutate(bird_sp_short=factor(bird_sp_short, levels=animal$bird_sp_short)) %>% 
+  mutate(id_plant=factor(id_plant, levels=plant$id_plant))
+```
+
+Heatmaps for animal and plant dependence, as well as asymmetry:
+```{r}
+plant.plot <- ggplot(hm.eff.dep, aes(x = bird_sp_short, y = as.factor(id_plant), fill= plant.dep)) + 
+  geom_tile() + theme_linedraw()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0),
+        plot.title = element_text(hjust = 0.5, size = 12, face = "bold"), 
+        axis.title.x=element_blank(), #axis.title.y=element_blank(),
+        legend.position = "bottom", legend.margin  = margin(0.02),
+        axis.text.y = element_blank(), panel.grid = element_blank()) + 
+  scale_fill_gradient(low="#d9d9d9", high="#000000", na.value = "white")+
+  scale_x_discrete(position = "top") + labs(fill = "", y="Individual plants")+ # labs(fill = "Plant dependence")+ 
+  guides(fill = guide_colourbar(barheight = 0.5, draw.ulim=T))
+
+animal.plot <- ggplot(hm.eff.dep, aes(x = bird_sp_short, y = as.factor(id_plant), fill= animal.dep)) + 
+  geom_tile() + theme_linedraw()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0),
+        plot.title = element_text(hjust = 0.5, size = 12, face = "bold"), 
+        axis.title.x=element_blank(), axis.title.y=element_blank(),
+        legend.position = "bottom", legend.margin  = margin(0.02),
+        axis.text.y = element_blank(), panel.grid = element_blank()) + 
+  scale_fill_gradient(low="#d9d9d9", high="#000000", na.value = "white")+
+  scale_x_discrete(position = "top") + labs(fill = "")+ #labs(fill = "Animal dependence")+ 
+  guides(fill = guide_colourbar(barheight = 0.5, draw.ulim=T))
+
+asymmetry.plot <- ggplot(hm.eff.dep, aes(x = bird_sp_short, y = as.factor(id_plant), fill=asymmetry)) + 
+  geom_tile() + theme_linedraw()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0),
+        plot.title = element_text(hjust = 0.5, size = 12, face = "bold"), 
+        axis.title.x=element_blank(), axis.title.y=element_blank(),
+        legend.position = "bottom", legend.margin  = margin(0.02),
+        axis.text.y = element_blank(), panel.grid = element_blank()) + 
+  scale_fill_gradient2(low="#E56518", mid="#ffffbf", high="#3970BD", na.value = "white")+
+  scale_x_discrete(position = "top") + labs(fill = "")+ # labs(fill = "Asymmetry")+ 
+  guides(fill = guide_colourbar(barheight = 0.5, draw.ulim=T))
+```
+
+Histogram of values:
+```{r}
+x1 <- hm.eff.dep$asymmetry
+y1 <- density(x1, bw=0.05, na.rm=T)
+asymmetry.den <- ggplot(data.frame(x = y1$x, y = y1$y), aes(x, y)) + geom_line() + 
+  geom_segment(aes(xend = x, yend = 0, colour = x)) + 
+  scale_color_gradient2(low="#E56518", mid="#ffffbf", high="#3970BD", na.value = "white") +
+  scale_x_continuous(limits=c(-1,1)) + 
+  labs(x="Asymmetry", y ="density")  + 
+  theme(legend.position = "none", panel.grid = element_blank(), panel.background= element_blank(),
+        axis.title.y = element_blank(), axis.text.y = element_blank(), axis.ticks.y= element_blank())
+
+x2 <- hm.eff.dep$plant.dep
+y2 <- density(x2, bw=.05, na.rm=T)
+plant.dep.den <- ggplot(data.frame(x = y2$x, y = y2$y), aes(x, y)) + geom_line() + 
+  geom_segment(aes(xend = x, yend = 0, colour = x)) + 
+  scale_color_gradient(low="#d9d9d9", high="#000000", na.value = "white") +
+  scale_x_continuous(limits=c(0,1)) + 
+  labs(x="Plant dependence", y ="density")  + 
+  theme(legend.position = "none", panel.grid = element_blank(), panel.background= element_blank(),
+        axis.title.y = element_blank(), axis.text.y = element_blank(), axis.ticks.y= element_blank())
+
+x3 <- hm.eff.dep$animal.dep
+y3 <- density(x3, bw=0.05, na.rm=T)
+animal.dep.den <- ggplot(data.frame(x = y3$x, y = y3$y), aes(x, y)) + geom_line() + 
+  geom_segment(aes(xend = x, yend = 0, colour = x)) + 
+  scale_color_gradient(low="#d9d9d9", high="#000000", na.value = "white") +
+  scale_x_continuous(limits=c(0,1)) + 
+  labs(x="Animal dependence", y ="density") + 
+  theme(legend.position = "none", panel.grid = element_blank(), panel.background= element_blank(),
+        axis.title.y = element_blank(), axis.text.y = element_blank(), axis.ticks.y= element_blank())
+```
+
+Put all figures together
+```{r, fig.height=12, fig.width=10}
+(plant.plot + animal.plot + asymmetry.plot) / 
+  (plant.dep.den + animal.dep.den + asymmetry.den) + 
+  plot_layout(heights = c(4, 1))
+
+#ggsave(here("manuscript/figures/Fig.5_Asymmetry_deps_no_edit.pdf"), width = 10, height=12)
+```
+

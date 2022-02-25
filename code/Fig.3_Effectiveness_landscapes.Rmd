@@ -1,0 +1,99 @@
+---
+title: "Fig_Effectiveness_landscapes"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, warning=F, message=F}
+library(here)
+library(tidyverse)
+library(dplyr)
+suppressPackageStartupMessages(library(tidylog))
+library(ggplot2)
+library(RColorBrewer)
+library(ggdist)
+library(plotly)
+library(effect.lndscp)
+library(ggpubr)
+
+theme_set(theme_minimal())
+```
+
+Non-legitimate dispersers list:
+```{r}
+nld <- c("Chloris chloris", "Cyanistes caeruleus", "Fringilla coelebs","Parus major",
+                    "Pyrrhula pyrrhula","Coccothraustes coccothraustes", "Columba palumbus")
+```
+
+Ready summarised data:
+```{r}
+effect.sum <- read.csv(here("data/effectiveness_summary.csv"), sep=",")
+```
+
+
+Specify plot colors:
+```{r}
+effect.sum <- effect.sum %>%
+  mutate(bird_agg=ifelse(bird_sp %in% c("Chloris chloris","Erithacus rubecula",
+                                        "Sylvia melanocephala", "Sylvia atricapilla",
+                                        "Turdus merula"), bird_sp, "Other species")) %>%
+  mutate(type=ifelse(bird_sp %in% nld, "predator", "legitimate"))
+
+bird_colors1 <- c("Erithacus rubecula"="#ffba59", 
+                  "Sylvia melanocephala"="#b2182b", 
+                  "Turdus merula"="#1a1a1a", 
+                  "Chloris chloris"="#c9e080", 
+                  "Sylvia atricapilla"="#7e53b7", 
+                  "Other species"="#b3b3b3")
+```
+
+## RPE landscape
+
+Remove plant 371 no pulp/seed weight info
+```{r}
+effect.sum <- effect.sum %>% drop_na(mean.rpe.qlc)
+```
+
+
+```{r, fig.height=6, fig.width=8}
+effectiveness_plot(q1=effect.sum$median.rpe.qtc, q2=effect.sum$median.rpe.qlc, 
+                   nlines = 7, lines.color = "light grey", pts.size=0.001) +
+  geom_point(aes(color=effect.sum$bird_agg, shape=effect.sum$type), size=3, alpha=.8) +
+  scale_color_manual(values = bird_colors1) +
+  guides(color=guide_legend(title="Bird species", nrow=1)) + 
+  theme(legend.position = "none") +
+  labs(y = "kJ per fruit/seed (Quality)", x = "Total number of fruits/seeds consumed (Quantity)")
+```
+
+## SDE landscape:
+
+```{r, fig.height=6, fig.width=8}
+effectiveness_plot(q1=effect.sum$median.sde.qtc, q2=effect.sum$median.sde.qlc, 
+                   nlines = 7, lines.color = "light grey", pts.size=0.1) +
+  geom_point(aes(color=effect.sum$bird_agg, shape=effect.sum$type), size=3, alpha=0.8) +
+  scale_color_manual(values = bird_colors1) +
+  guides(color=guide_legend(title="Bird species", nrow=1)) + 
+  theme(legend.position = "none") +
+  labs(y = "Prob of seedling recruitment (Quality)", x = "Total number of fruits/seeds consumed (Quantity)")
+```
+
+SDE only depicting legitimate seed dispersers:
+```{r, fig.height=6, fig.width=8}
+effect.sum.frug <- effect.sum %>% 
+  filter(!bird_sp %in% nld)
+
+
+effectiveness_plot(q1=effect.sum.frug$median.sde.qtc, q2=effect.sum.frug$median.sde.qlc, 
+                   nlines = 7, lines.color = "light grey", pts.size=0.1) +
+  geom_point(aes(color=effect.sum.frug$bird_agg), size=3, alpha=0.8) +
+  scale_color_manual(values = bird_colors1) +
+  guides(color=guide_legend(title="Bird species", nrow=1)) + 
+  theme(legend.position = "none") +
+  labs(y = "Prob of seedling recruitment (Quality)", x = "Total number of fruits/seeds consumed (Quantity)") +
+  ylim(0.000088, 0.000128)
+```
+

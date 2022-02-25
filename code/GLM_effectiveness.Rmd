@@ -1,0 +1,109 @@
+---
+title: "GLM effectiveness"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning=F, message=F}
+library(here)
+library(lme4)
+library(glmmTMB)
+library(DHARMa)
+library(tidyverse)
+suppressPackageStartupMessages(library(tidylog))
+library(ggplot2)
+library(ggpubr)
+library(visreg)
+```
+
+List non-legitimate dispersers:
+```{r}
+nld <- c("Chloris chloris", "Cyanistes caeruleus", "Fringilla coelebs","Parus major",
+                    "Pyrrhula pyrrhula","Coccothraustes coccothraustes", "Columba palumbus")
+```
+
+Load fruit consumption data:
+```{r}
+crop.consumed.wide <- readRDS(here("data-raw/SDE_QTY_crop_consumed_wide.rds")) %>% 
+  mutate(id_plant=as.factor(id_plant)) 
+```
+
+Load effectiveness dataset, where we extract plant traits:
+```{r}
+eff <- readRDS(here("data/effectiveness.rds")) %>%
+  mutate(qty.fru.manipulated=as.numeric(qty.fru.manipulated))
+```
+
+Summarize plant data
+```{r}
+plant.traits <- eff %>% group_by(id_plant) %>%
+  summarise(site=first(site), pulp.median=median(pulp_weight),
+            pulp.sd=sd(pulp_weight), initcrop=first(initcrop), 
+            area=first(area_new))
+```
+
+Summarize consumption data per individual plant by grouping bird consumption (i.e. 79 observations, not 80 because plant-371 doesn't have data pulp mass). We extract one value for all birds consumption (fru.cons.all) and one value for only legitimate dispersers (fru.cons.disp).
+```{r}
+rpe.plants <- crop.consumed.wide %>% 
+  dplyr::select(-all_of(nld)) %>%
+  mutate(fru.cons.per.bird = rowSums(across('Cyanopica cooki':'Turdus viscivorus'), na.rm = T)) %>%
+  group_by(id_plant) %>%
+  summarise(fru.cons.all=median(fruits.consumed.total),
+            fru.cons.disp=median(fru.cons.per.bird)) %>%
+  left_join(plant.traits) %>% 
+  filter(!is.na(pulp.median)) #remove plant 371 (no fruit data)
+```
+
+Round fruits consumed to convert into count data:
+```{r}
+rpe.plants <- rpe.plants %>% 
+  mutate(fru.cons.all.r=round(fru.cons.all)) %>%
+  mutate(fru.cons.disp.r=round(fru.cons.disp))
+```
+
+Response variable distribution:
+```{r}
+hist(rpe.plants$fru.cons.disp.r, breaks=50)
+```
+
+
+**MODEL FOR TOTAL CONSUMPTION PER PLANT**
+
+Data is aggregates all bird species consumption by plant
+```{r}
+m1 <- glmmTMB(fru.cons.disp.r ~ log(initcrop) + log(pulp.median) + log(area) + site, family = "nbinom2", data=rpe.plants)
+
+summary(m1)
+
+m1.output <- simulateResiduals(fittedModel = m1, plot = T)
+
+visreg(m1,  scale="response")
+visreg(m1, xvar = "pulp.median", by="site", scale="response")
+```
+Pulp mean has a positive effect, but with considerable uncertainty.
+
+```{r}
+ggplot(rpe.plants, aes(fru.cons.disp.r, pulp.median)) + geom_point() + stat_cor() + theme_bw()
+```
+
+There is a clear positive effect of area and initcrop on the total number of fruits consumed.
+Initcrop and area are correlated but not colinear, there is big dispersion in their relation.
+```{r}
+ggplot(rpe.plants, aes(area, initcrop)) + geom_point() + stat_cor() + theme_bw()
+```
+
+Relation crop ~ pulp (dot size=consumption)
+```{r}
+ggplot(data=rpe.plants, aes(x=initcrop, y=pulp.median, size=fru.cons.disp.r, color=site)) + 
+  geom_point() + theme_bw() +
+  scale_size_continuous(name="Consumption")
+```
+
+--------------------------------------------------------------------------------
+
+```{r session, echo= T}
+sessioninfo::session_info()
+```

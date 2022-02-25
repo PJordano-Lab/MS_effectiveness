@@ -1,0 +1,296 @@
+---
+title: "Effectiveness data preparation"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning=F, message=F}
+library(here)
+library(tidyverse)
+library(dplyr)
+suppressPackageStartupMessages(library(tidylog))
+library(ggplot2)
+library(RColorBrewer)
+library(ggdist)
+library(plotly)
+library(effect.lndscp)
+library(knitr)
+library(patchwork)
+
+theme_set(theme_minimal())
+```
+
+# Seed Dispersal Effectiveness data
+
+Load Quantity (QTC) and Quality (QLC) datasets:
+```{r}
+qtc.raw <- readRDS(here("data-raw/SDE_QTY_Nfruits_escape.rds"))
+
+sde.qlc.raw <- readRDS(here("data-raw/SDE_QLTY_mh.rds"))
+```
+
+Convert QTC data to wide format; where columns represent plant individuals and each row is one entry for a bird (n=1000 per bird)
+```{r}
+sde.qtc.wide <- qtc.raw %>% select(bird_sp, id_plant, qty.fru) %>%
+  pivot_wider(names_from = id_plant, values_from = qty.fru) %>%
+  tidyr::unnest() %>% arrange(bird_sp)
+```
+
+Convert QLC data to wide format; where there is one row per species, and mh effects are in columns.
+
+Leave just one value for the prob to escape bird predation (Prob.escape.bird.pred), as is equal in all microhabitats.
+
+Then sum the probabilities in all mh to calculate total bird quality.
+```{r}
+sde.qlc.wide <- sde.qlc.raw %>% 
+  select(bird_sp, mh, Prob.escape.bird.pred, Prob.bird.disperse.mh, 
+         Prob.escape.rodent.pred, Prob.seedling.surv, qlty.mh) %>%
+  pivot_wider(names_from = mh, values_from = c(Prob.escape.bird.pred, Prob.bird.disperse.mh, 
+              Prob.escape.rodent.pred, Prob.seedling.surv, qlty.mh)) %>% 
+  tidyr::unnest() %>% select(-c(Prob.escape.bird.pred_FR, Prob.escape.bird.pred_PP, 
+                                Prob.escape.bird.pred_NF, Prob.escape.bird.pred_OA)) %>% 
+  rename(Prob.escape.bird.pred = Prob.escape.bird.pred_PL) %>%
+  mutate(sde.qlc=qlty.mh_FR+qlty.mh_PL+qlty.mh_NF+qlty.mh_OA+qlty.mh_PP) %>%
+  arrange(bird_sp)
+```
+
+Check bird quality ranking (mean and median)
+```{r}
+sde.qlc.wide %>% group_by(bird_sp) %>% 
+  summarise(median=median(sde.qlc), mean=mean(sde.qlc)) %>% 
+  arrange(desc(mean))
+```
+
+
+Merge SDE quantity and quality in wide format:
+```{r}
+sde.wide <- cbind(sde.qtc.wide, sde.qlc.wide)
+```
+
+Convert SDE to long format; where each row reseprent one interaction
+```{r}
+sde.long <- sde.wide %>% 
+  pivot_longer(cols=c(2:81), names_to="id_plant", values_to="qty.fru") %>% drop_na(qty.fru) %>%
+  relocate(id_plant, .before=bird_sp) %>%
+  relocate(qty.fru, .after=bird_sp) %>%
+  relocate(sde.qlc, .after=qty.fru) %>% 
+  arrange(id_plant, bird_sp)
+```
+
+
+# Resource Provisioning Effectiveness
+
+Correct fruit consumption in seed predators by substracting the seed escaping predation (i.e. seeds fallen from the beak of predators)
+```{r}
+rpe.qtc <- qtc.raw %>% 
+  mutate(qty.fru.consumed = ifelse(bird_sp %in% c("Chloris chloris", "Fringilla coelebs", 
+           "Pyrrhula pyrrhula", "Coccothrarustes coccothrarustes"), 
+           qty.fru*(1-prob.escape), qty.fru))
+```
+
+Convert quantity to long format where each row is a plant (n=1000 simulations per plant) and columns are birds
+```{r}
+rpe.qtc.wide <- rpe.qtc %>% select(bird_sp, id_plant, qty.fru.consumed) %>%
+  pivot_wider(names_from = bird_sp, values_from = qty.fru.consumed) %>%
+  tidyr::unnest() %>% arrange(id_plant)
+```
+
+
+Load observed pulp and seed weights:
+convert data to mg and calculate pulp weight
+```{r}
+puntal_fruits <- read.csv(here('data-raw/fruit_characteristics.csv'), sep=";", comment.char = "#")%>% 
+  mutate(id_plant = as.factor (plant_id))%>%
+  mutate(fruit_weight=fruit_weight/10000) %>%
+  mutate(seed_weight=seed_weight/10000) %>% 
+  mutate(pulp_weight=(fruit_weight-seed_weight))
+```
+
+Generate 1000 entries for pulp and seed weights values for each plant:
+```{r}
+set.seed(1)
+
+plants <- c(301:327, 329:332, 334:370, 372:376, 378:383)
+
+# plants 328, 333, 377 (did not fruit in 2nd field season, so no interaction data), and plant 371 has no pulp data
+
+weight_imputed <- data.frame()
+
+for (i in 1:length(plants)){
+plant_pulp <- puntal_fruits %>% filter(id_plant==plants[[i]])
+id_plant = rep (plants[[i]], 1000)
+pulp_weight = sample(na.omit(plant_pulp$pulp_weight), size = 1000, replace=TRUE)
+seed_weight = sample(na.omit(plant_pulp$seed_weight), size = 1000, replace=TRUE)
+weight_plant <- cbind(id_plant, pulp_weight, seed_weight)
+weight_imputed <- rbind(weight_imputed, weight_plant)
+}
+
+#add NA info for plant 371
+pulp_weight = sample(NA, size = 1000, replace=TRUE)
+seed_weight = sample(NA, size = 1000, replace=TRUE)
+weight_plant_371 <- cbind(id_plant=371, pulp_weight, seed_weight)
+weight_imputed <- rbind(weight_imputed, weight_plant_371)
+```
+
+Compare distributions with observed data and repetitions. They maintain the same distribution.
+```{r}
+#histogram pulp mass distribution vs. IMPUTED pulp mass distribution
+puntal_fruits %>%
+  ggplot(aes(x=pulp_weight)) +
+  geom_histogram(color="red", fill="white", binwidth=0.001) +
+  geom_histogram(aes(x=seed_weight), color="grey", fill="white", binwidth=0.001, alpha=0.1)
+
+weight_imputed %>%
+  ggplot(aes(x=pulp_weight))  +
+  geom_histogram(color="red", fill="white", binwidth=0.001) +
+  geom_histogram(aes(x=seed_weight), color="grey", fill="white", binwidth=0.001, alpha=0.1)
+
+```
+
+Load % of water and energy values
+```{r}
+HR_fruits <- read.csv(here('data-raw/fruit_traits_HR_pedro.csv'), sep=";", comment.char = "#")
+
+PWP <- mean(HR_fruits$pcap)
+SWP <- mean(HR_fruits$pcas)
+
+P.energy <- 25.2513 #Using nutrient percentages of Herrera 1987 Ecol Monog  (58.8 for lipids, 5.5. for prots and 25.8 for NSC) and using conversion factors of FAO - MacLean 2003 which are: 14.1 for prots, 15.1 for carbs and 35 for lipids. In Herrera 1982 Evol he uses different conversion factors, which are: 23.63 for prots, 17.15 for carbs and 39.53 for lipids (rendering 7.23 Kcal/g = 30.25032 kJ/g)
+S.energy <- 28.14 #From Khiari t al. 2020 Biomass Conversion & Biorefinery in MJ/kg = kJ/g
+```
+
+Calculate total fruit reward (fresh weight * (1-water %) * energy/dry g)
+```{r}
+rpe.qlc <- weight_imputed %>% 
+  mutate(PWP=PWP, SWP=SWP, P.energy=P.energy, S.energy=S.energy) %>%
+  mutate(p.reward = pulp_weight*(1-PWP)*P.energy,
+         s.reward = seed_weight*(1-SWP)*S.energy) %>% #kj/fruit obtained
+  mutate(id_plant=as.factor(id_plant)) %>% arrange(id_plant)
+```
+
+Summary of pulp and seed reward:
+```{r}
+summary(rpe.qlc$p.reward)
+summary(rpe.qlc$s.reward)
+```
+
+Merge RPE quantity and quality in wide format:
+```{r}
+rpe.wide <- cbind(rpe.qtc.wide, rpe.qlc)
+```
+
+Convert RPE to long format:
+```{r}
+rpe.long <- rpe.wide %>%
+  pivot_longer(cols = `Chloris chloris`:`Turdus viscivorus`, 
+               names_to = "bird_sp", 
+               values_to = "fruits.consumed.sp") %>%
+  filter(!is.na(fruits.consumed.sp)) %>% 
+  arrange(id_plant, bird_sp)
+
+missing_qtc_attributes <- rpe.qtc %>%
+  arrange(id_plant, bird_sp) %>%
+  select(site, Nvisit.site, Pvisit.sp, Pfeed, Nfruits, qty.fru, qty.fru.consumed)
+
+rpe.long <- cbind(missing_qtc_attributes, rpe.long) %>%
+  mutate(fruit.reward = ifelse(bird_sp %in% c("Chloris chloris", "Fringilla coelebs", "Pyrrhula pyrrhula",
+                                              "Coccothraustes coccothraustes"), s.reward, p.reward)) %>% 
+  relocate(id_plant, .after=site) %>%
+  relocate(bird_sp, .after=id_plant) %>%
+  relocate(qty.fru.consumed, .after=bird_sp) %>%
+  relocate(fruit.reward, .after=qty.fru.consumed) %>%
+  select(-fruits.consumed.sp) %>%
+  arrange(id_plant, bird_sp)
+```
+
+
+# MERGE SDE AND RPE
+
+Remove columns in SDE with the same name present in RPE data, and rename the qty fruits as "manipulated".
+```{r}
+sde.long.selec <- sde.long %>% select(-c(id_plant, bird_sp)) %>% rename(qty.fru.manipulated=qty.fru)
+```
+
+Merge dataset already ordered by id_plant and bird_sp
+```{r}
+effect.long <- cbind(rpe.long, sde.long.selec) %>%
+  relocate(qty.fru.manipulated, .after=bird_sp) %>%
+  relocate(sde.qlc, .after=fruit.reward) %>%
+  relocate(qty.fru.manipulated, .after=bird_sp)
+```
+
+# ADD INDIVIDUAL PLANTS TRAITS
+Load initcrop and areas:
+```{r}
+dron_areas <- read.csv(here("data-raw/dron_areas.csv"), sep=";") %>% 
+  mutate(id_plant=as.factor(plant_id)) %>% 
+  select(-c(site, plant_id)) 
+
+crop.consumed.wide <- readRDS(here("data-raw/SDE_QTY_crop_consumed_wide.rds")) %>% 
+  mutate(id_plant=as.factor(id_plant)) 
+
+initcrop <- crop.consumed.wide %>% group_by(id_plant) %>% summarise(initcrop=first(initcrop))
+```
+
+Add initcrop and areas and calculate SDE and RPE
+```{r}
+effect.long <- effect.long %>% 
+  select(-qty.fru) %>% #remove duplicated variable (=qty.fru.manipulated)
+  mutate(id_plant=as.factor(id_plant)) %>%
+  left_join(dron_areas) %>%
+  left_join(initcrop) %>%
+  mutate(sde=qty.fru.manipulated*sde.qlc,
+         rpe=qty.fru.consumed*fruit.reward)
+```
+
+Save dataset:
+```{r}
+saveRDS(effect.long, here("data", "effectiveness.rds"))
+```
+
+
+# SUMMARIZED DATASET
+
+*Summarize 1000 bayes posterior distributions*
+```{r}
+effect.sum <- effect.long %>%
+  group_by(id_plant, bird_sp) %>%
+  summarise(mean.sde.qtc=mean(qty.fru.manipulated), median.sde.qtc=median(qty.fru.manipulated),
+            mean.sde.qlc=mean(sde.qlc), median.sde.qlc=median(sde.qlc),
+            mean.rpe.qtc=mean(qty.fru.consumed), median.rpe.qtc=median(qty.fru.consumed),
+            mean.rpe.qlc=mean(fruit.reward), median.rpe.qlc=median(fruit.reward),
+            initcrop=first(initcrop), area=first(area_new),
+            median.sde.qlc.FR=median(qlty.mh_FR), median.sde.qlc.NF=median(qlty.mh_NF), 
+            median.sde.qlc.OA=median(qlty.mh_OA), median.sde.qlc.PP=median(qlty.mh_PP), 
+            median.sde.qlc.PL=median(qlty.mh_PL),
+            mean.sde=mean(sde), median.sde=median(sde),
+            mean.rpe=mean(rpe), median.rpe=median(rpe))
+```
+
+Save summarized dataset:
+```{r}
+write_csv(effect.sum, here("data", "effectiveness_summary.csv"))
+```
+
+
+*Generate interaction matrix with Quantity data (i.e. number of fruits consumed)*
+```{r}
+effect.sum.mat <- effect.sum %>% 
+  separate(bird_sp, into = c("genus", "sp"), remove = FALSE) %>% 
+  mutate(bird_sp_short = paste0(str_sub(genus, end = 3), ".", str_sub(sp, end = 3))) %>% 
+  mutate(bird_sp_short = ifelse(bird_sp_short == "NA.NA", NA, bird_sp_short)) %>% 
+  select(-genus, -sp) %>% 
+  relocate(bird_sp_short, .after = bird_sp)
+
+int_matrix <- effect.sum.mat %>% select(bird_sp_short, id_plant, median.rpe.qtc) %>%
+  mutate(median.rpe.qtc=round(median.rpe.qtc, digits = 2)) %>%
+  pivot_wider(names_from = bird_sp_short, values_from = median.rpe.qtc)
+```
+
+```{r}
+write_csv(int_matrix, here("data", "consumed_fruit_mat.csv"))
+```
+
+
