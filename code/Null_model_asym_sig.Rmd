@@ -1,0 +1,264 @@
+---
+title: "Null_model_asym_sig"
+output: github_document
+---
+
+```{r, message=F}
+library(here)
+library(tidyverse)
+library(bipartite)
+
+theme_set(theme_minimal())
+```
+
+
+List of seed predators:
+
+```{r}
+sp <- c("Chloris chloris", "Fringilla coelebs", "Pyrrhula pyrrhula", "Coccothraustes coccothraustes", "Columba palumbus")
+```
+
+------------------------------------------------------------------------
+
+To estimate the significance of the observed asymmetry values, we
+generate null webs based on our fruit consumption findings, and see if
+when species interact “randomly”, they would provide similar asymmetry
+distributions. We will use 3 different null models: patefield, swap and
+vazquez.
+
+To do the web reshuffling, we need to work with the consumption network
+(i.e., the QTC). Then, given the constant quality values for the plants
+and dispersers, we calculate di novo the value of RPE and SDE for each
+of the generated null webs
+
+1st. Read the raw interaction matrix based on the number of fruits
+consumed (QTC). We remove all interactions with Coccothraustes, since
+the number of fruits consumed is 0 when rounded, so there is no
+dependence (this 0 value creates conflict with the Vazquez null model,
+so it is removed from all analyses at the beginning).
+
+``` {r}
+int.mat <- read_csv(here("data/consumed_fruit_mat.csv")) %>% column_to_rownames(var="id_plant") %>% 
+  round() %>% select(-Coc.coc)
+
+int.mat[is.na(int.mat)] <- 0
+```
+
+2nd. Read data for extracting quality (QLC)
+
+``` {r}
+eff <- readRDS(here("data/effectiveness.rds"))
+```
+
+
+**Bird quality:** Extract bird quality, create birds acronyms and remove
+coccotharustes
+
+``` {r}
+bird_quality <- eff %>% group_by(bird_sp) %>% 
+  summarise(sde.qlc=median(sde.qlc)) %>% 
+  separate(bird_sp, into = c("genus", "sp"), remove = FALSE) %>% 
+  mutate(bird_sp_short = paste0(str_sub(genus, end = 3), ".", str_sub(sp, end = 3))) %>% 
+  mutate(bird_sp_short = ifelse(bird_sp_short == "NA.NA", NA, bird_sp_short)) %>% 
+  select(-genus, -sp) %>% 
+  relocate(bird_sp_short, .after = bird_sp) %>%
+  filter(bird_sp_short!="Coc.coc")
+```
+
+
+**Plant quality:** Extract quality for pulp and seed, as different for
+seed predators and pulp consumers.
+
+``` {r}
+plant_quality <- eff %>% group_by(id_plant) %>% 
+  summarise(pulp.qlc=median(p.reward), seed.qlc=median(s.reward))
+```
+
+
+Calculate RPE and SDE with the qtc matrix and qlc values:
+
+``` {r}
+long.int <- int.mat %>% rownames_to_column("id_plant") %>%
+  pivot_longer(cols = c(2:27), names_to="bird_sp_short", values_to="qtc") %>%
+  left_join(bird_quality) %>% left_join(plant_quality) %>%
+  mutate(rpe.qlc=ifelse(bird_sp %in% sp, seed.qlc, pulp.qlc)) %>%
+  mutate(sde=qtc*sde.qlc, rpe=qtc*rpe.qlc)
+```
+
+Calculate **observed** dependencies and asymmetry:
+
+``` {r}
+eff.dep <- long.int %>% 
+  mutate(sde=ifelse(qtc==0, NA, sde),
+         rpe=ifelse(qtc==0, NA, rpe)) %>%
+  group_by(id_plant) %>%
+  mutate(sde.plant=sum(sde, na.rm=T)) %>%
+  mutate(sde.dep=sde/sde.plant) %>%
+  ungroup() %>%
+  group_by(bird_sp) %>%
+  mutate(rpe.bird=sum(rpe, na.rm = T)) %>%
+  mutate(rpe.dep=rpe/rpe.bird) %>%
+  ungroup() %>%
+  mutate(asy.num=sde.dep-rpe.dep) %>%
+  rowwise() %>%
+  mutate(asy.denom=ifelse(is.na(sde.dep), NA, max(sde.dep, rpe.dep))) %>%
+  mutate(asymmetry=asy.num/asy.denom) %>%
+  mutate(int=paste0(id_plant, "-", bird_sp_short))
+```
+
+**Null models**
+(<https://fukamilab.github.io/BIO202/09-B-networks.html>)
+
+A common binary null model:
+
+-   ‘shuffle.web’ - shuffles cells around the interaction matrix, keeps
+    nothing constant
+
+Common weighted null models:
+
+-   ‘r2dtable’ - changes cell values while keeping row and column sums
+    constant
+
+-   ‘vaznull’ - changes cell values while keeping connectance (number of
+    links in the matrix) constant
+    
+
+# PATEFIELD NULL MODELS
+
+Generate Patefield’s null models for QTC web
+
+``` {r echo=T, eval=F}
+nulls <- nullmodel(round(int.mat), N=1000, method="r2dtable")
+
+#write_rds(nulls, here("data/null_models_patefield.rds"))
+```
+
+Calculate dependence and asymmetry values for Patefield null webs
+
+``` {r echo=T, eval=F}
+null.as<-eff.dep$int
+
+for (i in 1:1000){ 
+  subset.nulls <- nulls[[i]]
+  colnames(subset.nulls) <- colnames(int.mat)
+  rownames(subset.nulls) <- rownames(int.mat)
+  long.int.null <- as.data.frame(subset.nulls) %>% 
+    rownames_to_column("id_plant") %>%
+    pivot_longer(cols = c(2:27), names_to="bird_sp_short", values_to="qtc") %>%
+    left_join(bird_quality) %>% left_join(plant_quality) %>%
+    mutate(rpe.qlc=ifelse(bird_sp %in% sp, seed.qlc, pulp.qlc)) %>%
+    mutate(sde=qtc*sde.qlc, rpe=qtc*rpe.qlc)
+  eff.dep.null <- long.int.null %>% 
+    mutate(sde=ifelse(qtc==0, NA, sde),
+         rpe=ifelse(qtc==0, NA, rpe)) %>%
+    group_by(id_plant) %>%
+    mutate(sde.plant=sum(sde, na.rm = T)) %>%
+    mutate(sde.dep=sde/sde.plant) %>%
+    ungroup() %>%
+    group_by(bird_sp) %>%
+    mutate(rpe.bird=sum(rpe, na.rm = T)) %>%
+    mutate(rpe.dep=rpe/rpe.bird) %>%
+    ungroup() %>%
+    mutate(asy.num=sde.dep-rpe.dep) %>%
+    rowwise() %>%
+    mutate(asy.denom=ifelse(is.na(sde.dep), NA, max(sde.dep, rpe.dep))) %>%
+    mutate(asymmetry=asy.num/asy.denom)
+  names(eff.dep.null)[17] <- paste0("as", i)
+  null.as <- cbind(null.as, eff.dep.null[17])
+}
+
+write_rds(null.as, here("data/asymm_null_models_patefield.rds"))
+```
+
+If not run loop, then load data:
+
+``` {r}
+null.as <- readRDS(here("data/asymm_null_models_patefield.rds"))
+```
+
+Plot observed asymmetry distribution vs. the distribution of the 1000
+null patefield generated asymmetries:
+
+``` {r}
+patefield <- data.frame(as.list(null.as)) %>% 
+  pivot_longer(cols = c(-1), values_to = "asymmetry", names_to="model")
+
+ggplot(eff.dep, aes(x=asymmetry, y=..count..)) + 
+  geom_line(inherit.aes=F, data=patefield, aes(x=asymmetry, group=model, y=..count..), 
+            stat="density", bw=0.04,  color="#a6bddb", alpha=.05) + 
+  geom_line(stat="density", bw=0.04) + 
+  scale_x_continuous(limits=c(-1.1,1.1))
+```
+
+# VAZQUEZ NULL MODELS
+
+Generate Vazquez null models for QTC web
+
+``` {r echo=T, eval=F}
+nulls.vaz <- nullmodel(ceiling(int.mat), N=1000, method="vaznull")
+
+#write_rds(nulls.vaz, here("data/null_models_vazquez.rds"))
+```
+
+Calculate dependence and asymmetry values for vazquez null webs
+
+``` {r echo=T, eval=F}
+null.as.vaz <- eff.dep$int
+
+for (i in 1:1000){ 
+  subset.nulls <- nulls.vaz[[i]]
+  colnames(subset.nulls) <- colnames(int.mat[-27])
+  rownames(subset.nulls) <- rownames(int.mat)
+  long.int.null <- as.data.frame(subset.nulls) %>% 
+    rownames_to_column("id_plant") %>%
+    pivot_longer(cols = c(2:27), names_to="bird_sp_short", values_to="qtc") %>%
+    left_join(bird_quality) %>% left_join(plant_quality) %>%
+    mutate(rpe.qlc=ifelse(bird_sp %in% sp, seed.qlc, pulp.qlc)) %>%
+    mutate(sde=qtc*sde.qlc, rpe=qtc*rpe.qlc)
+  eff.dep.null <- long.int.null %>% 
+    mutate(sde=ifelse(qtc==0, NA, sde),
+         rpe=ifelse(qtc==0, NA, rpe)) %>%
+    group_by(id_plant) %>%
+    mutate(sde.plant=sum(sde, na.rm = T)) %>%
+    mutate(sde.dep=sde/sde.plant) %>%
+    ungroup() %>%
+    group_by(bird_sp) %>%
+    mutate(rpe.bird=sum(rpe, na.rm = T)) %>%
+    mutate(rpe.dep=rpe/rpe.bird) %>%
+    ungroup() %>%
+    mutate(asy.num=sde.dep-rpe.dep) %>%
+    rowwise() %>%
+    mutate(asy.denom=ifelse(is.na(sde.dep), NA, max(sde.dep, rpe.dep))) %>%
+    mutate(asymmetry=asy.num/asy.denom)
+  names(eff.dep.null)[17] <- paste0("as", i)
+  null.as.vaz <- cbind(null.as.vaz, eff.dep.null[17])
+}
+
+write_rds(null.as.vaz, here("data/asymm_null_models_vazquez.rds"))
+```
+
+If not run loop, then load data:
+
+``` {r}
+null.as.vaz <- readRDS(here("data/asymm_null_models_vazquez.rds"))
+```
+
+Plot observed asymmetry distribution vs. the distribution of the 3 null
+model generated asymmetries (Patefield in blue, swap in red and vazquez
+in orange):
+
+``` {r}
+vaz <- data.frame(as.list(null.as.vaz)) %>% 
+  pivot_longer(cols = c(-1), values_to = "asymmetry", names_to="model")
+
+ggplot(eff.dep, aes(x=asymmetry, y=..count..)) + 
+  geom_line(inherit.aes=F, data=patefield, aes(x=asymmetry, group=model, y=..count..), 
+                stat="density", alpha=0.05, color="#a6bddb", bw=0.04) +
+  geom_line(inherit.aes=F, data=vaz, aes(x=asymmetry, group=model, y=..count..), 
+                stat="density", alpha=0.05, color="#fc8d62", bw=0.04) +
+  geom_line(stat="density", bw=0.04) + scale_x_continuous(limits=c(-1.1,1.1)) + theme_bw()
+
+#ggsave(here("manuscript/figures/Fig.SH.2_Null_model_significance.pdf"), width = 6, height = 5)
+```
+
+
