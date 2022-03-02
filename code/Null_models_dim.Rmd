@@ -1,0 +1,152 @@
+---
+title: "Null model dimensions"
+output: github_document
+---
+
+``` {r message=F}
+library(here)
+library(tidyverse)
+library(tidylog)
+library(ggplot2)
+library(RColorBrewer)
+library(ggdist)
+library(plotly)
+library(ggpubr)
+
+theme_set(theme_minimal())
+```
+
+Read SDE and RPE values:
+
+``` {r}
+effect <- readRDS(here("data/effectiveness.rds"))
+```
+
+Summarise data to calculate median RPE and SDE:
+
+``` {r}
+effect_sum <- effect %>%
+  mutate(sde.eff=qty.fru.manipulated*sde.qlc, rpe.eff=qty.fru.consumed*fruit.reward) %>%
+  group_by(id_plant, bird_sp) %>%
+  summarise(median.sde=median(sde.eff), median.rpe=median(rpe.eff),
+            initcrop=first(initcrop), area=first(area_new))
+```
+
+In order to do simulations we need to work with the RPE and SDE values,
+for which I generate one matrix with SDE values and another matrix with
+RPE values, and merge together into one (where rows are plants and each
+animals has two columns, one with RPE and on with SDE). In this way we
+can later do subsamplings on the number of plants (i.e. number of rows).
+
+``` {r}
+sde.mat <- effect_sum %>%
+    mutate(bird_sp=paste0(bird_sp,"_SDE")) %>%
+    select(id_plant, bird_sp, median.sde) %>%
+    pivot_wider(names_from=bird_sp, values_from=median.sde) %>% 
+    ungroup()
+```
+
+``` {r}
+rpe.mat <- effect_sum %>% 
+    mutate(bird_sp=paste0(bird_sp,"_RPE")) %>%
+    select(id_plant, bird_sp, median.rpe) %>%
+    pivot_wider(names_from=bird_sp, values_from=median.rpe) %>%
+    ungroup()
+```
+
+``` {r}
+mat.full <- full_join(sde.mat, rpe.mat) %>% filter(id_plant!=371)
+```
+
+Now I subsample 20, 40 and 60 rows (n=1000 repetitions for each subsampling cut) - this loop takes some time (~15min on my computer).
+Can just read it at the end of the chunk.
+
+``` {r echot=T, eval=F}
+asy.permutations <- data.frame()
+
+for (k in c(20, 40, 60)){
+  for (i in 1:1000){
+sampling <- mat.full %>%
+  slice_sample(n=k, replace=F) %>%
+  pivot_longer(cols=c("Chloris chloris_SDE":"Coccothraustes coccothraustes_RPE"),
+               names_to="bird_sp", values_to="effectiveness") %>%
+  mutate(type=str_sub(bird_sp, start= -3)) %>%
+  mutate(bird_sp=str_sub(bird_sp, end= -5)) %>%
+  pivot_wider(names_from=type, values_from=effectiveness) %>%
+  group_by(id_plant) %>%
+  mutate(sde.plant=sum(SDE, na.rm=T)) %>%
+  mutate(sde.dep=SDE/sde.plant) %>%
+  ungroup() %>%
+  group_by(bird_sp) %>%
+  mutate(rpe.bird=sum(RPE, na.rm = T)) %>%
+  mutate(rpe.dep=RPE/rpe.bird) %>%
+  ungroup() %>%
+  rowwise() %>%
+  mutate(asy.num=sde.dep-rpe.dep) %>%
+  mutate(asy.denom=ifelse(!is.na(asy.num), max(sde.dep, rpe.dep, na.rm = T), NA)) %>%
+  mutate(asymmetry=asy.num/asy.denom) %>%
+  filter(!is.na(asymmetry))
+ele <- sampling  %>% select(asymmetry) %>% mutate(permutation=i, size=k)
+asy.permutations <- rbind(asy.permutations, ele)
+  }
+}
+
+write_rds(asy.permutations, here("data/null_model_matrix_dimensions.rds"))
+```
+
+Read output of loop:
+``` {r}
+asy.permutations <- readRDS(here("data/null_model_matrix_dimensions.rds"))
+```
+
+Specify matrix size as treatment (convert from numeric to character).
+
+``` {r}
+asy.permutations <- as.data.frame(asy.permutations) %>% 
+  mutate(size2 = ifelse(size==20, "20 plants", "other"),
+         size2 = ifelse(size==40, "40 plants", size2),
+         size2 = ifelse(size==60, "60 plants", size2))
+```
+
+Load observed dependence and asymmetry values data:
+
+``` {r}
+dep <- readRDS(here("data/Dependency_distribution.rds"))
+```
+
+Summarise observed data:
+
+``` {r}
+dep.sum <- dep %>% group_by(id_plant, bird_sp) %>%
+  summarise(rpe.animal=median(rpe.animal.1.pdp), sde.plant=median(sde.plant.1.pdp),
+            rpe=median(rpe.eff), sde=median(sde.eff),
+            animal.dep=median(rpe.dep), plant.dep=median(sde.dep),
+            asymmetry=median(asymmetry)) %>% mutate(size=80)
+```
+
+Plot all asymmetries distribution for different matrix sizes.
+
+``` {r}
+ggplot(asy.permutations, aes(x=asymmetry, group=permutation)) + 
+  geom_line(stat="density", bw=0.04, alpha=.05, colour="#a6bddb") + 
+  geom_density(inherit.aes=F, data=dep.sum, aes(x=asymmetry), bw=0.04) +
+  facet_grid(~size2) + theme(legend.position = "none") + scale_x_continuous(limits=c(-1.1,1.1)) +
+  theme_bw()
+  # labs(caption = "Black line represents observed asymmetry. 
+  #      There are 1000 repetitions for matrices of different dimensions (20, 40 and 60 rows)")
+
+#ggsave(here("manuscript/figures/Fig.SH.1_Null_model_dims.pdf"), width = 7, height = 5)
+```
+
+Observed asymmetry distribution: Shaded lines represent asymmetry for
+each of the 1000 posterior distribution probabilities, and the dark line the median asymmetry.
+
+``` {r}
+obs.dep.selec <- dep %>% select(asymmetry, pdp) %>% mutate(size=80)
+
+ggplot(obs.dep.selec, aes(x=asymmetry, group=pdp)) + 
+  geom_line(stat="density", bw=0.04, alpha=.05, color="grey70") + 
+  geom_line(inherit.aes=F, data=dep.sum, aes(x=asymmetry), stat="density", bw=0.04)
+  # labs(caption = "Black line represents asymmetry calculated using median values. 
+  #      Thin transparent grey lines represent asymmetry for each of the 1000 posteriors")
+```
