@@ -1,0 +1,217 @@
+---
+title: "Probability of escaping seed predation at each microhabitat"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+
+```{r setup, include=FALSE}
+set.seed(88)
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, out.width = '100%', 
+                      cache = TRUE, message = FALSE)
+```
+
+```{r }
+library(here)
+library(readr)
+library(dplyr)
+library(ggplot2)
+suppressPackageStartupMessages(library(tidylog))
+
+source(here("code", "functions.R"))
+
+theme_set(theme_minimal())
+```
+
+
+Load data
+
+```{r}
+mhdata <- read_csv(here("data", "seed_predation.csv"), guess_max = 10000) %>% 
+  mutate(seeds.diff = experimental - control)
+
+```
+
+
+```{r}
+ggplot(mhdata) +
+  aes(day_since_install, experimental, group = id_station) +
+  facet_wrap(~mh) +
+  geom_line() +
+  labs(y = "Number of seeds alive",
+       title = "Seed removal in the experimental stations",
+       caption = "All stations started with 10 seeds")
+```
+
+
+## Estimate time of seed germination
+
+Once seeds germinate, their risk of predation is much reduced.
+
+```{r}
+emerg <- read_csv(here("data", "seedling_emergence.csv"), guess_max = 10000) %>% 
+  mutate(days_to_emergence = difftime(emergence_date, sowing_date)) %>% 
+  distinct(seed_id, .keep_all = TRUE)
+  
+sort(emerg$days_to_emergence)
+median(emerg$days_to_emergence, na.rm = TRUE)
+hist(as.numeric(emerg$days_to_emergence))
+summary(as.numeric(emerg$days_to_emergence))
+```
+
+Seeds start to emerge ~30 days. So, using ~1 month as the main predation window, to somewhat compensate for the fact that the devices used in the seed predation experiment may attract predators (more than seeds fallen naturally on the ground), and also that sown seeds were buried a bit (more than most naturally dispersed seeds) so they would take a bit longer to emerge.
+
+```{r}
+sort(unique(mhdata$day_since_install))
+
+mhdata <- mhdata %>% 
+  filter(day_since_install == 29)
+```
+
+
+
+### Prior Predictive Check
+
+
+```{r }
+
+library(brms)
+
+mhdata <- mhdata %>% 
+  mutate(station = 1:n())
+
+pred.formu <- brmsformula(experimental | trials(10) ~ mh + (1 | station), 
+                            family = binomial())
+
+get_prior(pred.formu, data = mhdata)
+
+## priors (logit scale)
+# plogis(2) = 0.88
+# plogis(1) = 0.73
+# plogis(3) = 0.95
+# plogis(0) = 0.5
+# plogis(-1) = 0.27
+# plogis(-2) = 0.12
+# plogis(-3) = 0.05
+priors <- c(
+  prior(normal(-1, 2), class = "Intercept"), 
+  prior(normal(0, 2), class = "b"),
+  prior(normal(0, 3), class = "sd")
+)
+```
+
+
+Prior predictive check:
+
+```{r eval=FALSE}
+pred.m <- brm(pred.formu,
+         data = mhdata,
+         prior = priors,
+         sample_prior = "only",
+         cores = 4,
+         iter = 2000,
+         refresh = 0)
+
+# stancode(pred.m)
+pp_check(pred.m, ndraws = 100) 
+summary(pred.m, priors = TRUE)
+plot(pred.m)
+```
+
+
+
+### Fit model
+
+
+```{r }
+pred.m <- brm(pred.formu,
+         data = mhdata,
+         prior = priors,
+         cores = 4,
+         iter = 2000,
+         refresh = 0)
+```
+
+
+Check: 
+
+```{r }
+library(DHARMa)
+
+pp_check(pred.m, ndraws = 100)
+bayesplot::ppc_rootogram(y = mhdata$experimental, 
+                         yrep = posterior_predict(pred.m, ndraws = 1000))
+bayestestR::check_prior(pred.m)
+
+summary(pred.m, priors = TRUE)
+
+plot(pred.m, ask = FALSE)
+
+stancode(pred.m)
+
+# coef(pred.m)
+fixef(pred.m)
+ranef(pred.m)
+
+# modelbased::estimate_means(pred.m)
+
+#mcmc_plot(pred.m, pars = "sampling_point")
+# launch_shinystan(pred.m)
+
+#DHARMa
+pred.check <- check_brms(pred.m, integer = TRUE)
+plot(pred.check, form = mhdata$mh)
+testDispersion(pred.check)
+
+saveRDS(pred.m, here("analysis", "output", "pred.mh.model.rds"))
+
+```
+
+
+
+### Predict
+
+```{r }
+
+## Full posterior distributions
+# Mean number of seeds per m2 per MH
+pred.post <- posterior_linpred(pred.m, 
+                                newdata = data.frame(
+                                  mh = unique(mhdata$mh),
+                                  # sampling_point = seeds.mh$sampling_point,
+                                  trials = 1   # to obtain probability of survival per seed
+                                  ),
+                                re_formula = NA,  # do not include random effects, only MH
+                                ndraws = 1000) %>% 
+  as.data.frame() %>%
+  setNames(unique(mhdata$mh)) 
+
+
+pred.post.long <- pred.post %>% 
+  tidyr::pivot_longer(cols = everything(), names_to = "mh", values_to = "Prob.escaping.pred") %>%
+  arrange(mh) %>% 
+  mutate(Prob.escaping.pred = plogis(Prob.escaping.pred))
+
+saveRDS(pred.post.long, here("analysis", "output", "pred.mh.post.long.rds"))
+
+```
+
+
+```{r}
+pred.post.long %>% 
+  group_by(mh) %>% 
+  summarise(median(Prob.escaping.pred))
+
+ggplot(pred.post.long) +
+  geom_density(aes(Prob.escaping.pred), fill = "lightgrey") +
+  facet_wrap(~mh, ncol = 1, scales = "free_y") +
+  coord_cartesian(xlim = c(0, 0.1)) +
+  theme(axis.text.y = element_blank())
+```
+
+
+```{r}
+sessioninfo::session_info()
+```
+

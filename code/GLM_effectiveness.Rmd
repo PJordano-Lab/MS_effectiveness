@@ -27,7 +27,7 @@ nld <- c("Chloris chloris", "Cyanistes caeruleus", "Fringilla coelebs","Parus ma
 
 Load fruit consumption data:
 ```{r}
-crop.consumed.wide <- readRDS(here("data-raw/SDE_QTY_crop_consumed_wide.rds")) %>% 
+crop.consumed.wide <- readRDS(here("data/SDE_QTY_crop_consumed_wide.rds")) %>% 
   mutate(id_plant=as.factor(id_plant)) 
 ```
 

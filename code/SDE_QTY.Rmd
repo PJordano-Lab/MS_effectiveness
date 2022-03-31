@@ -1,0 +1,203 @@
+---
+title: "Calculate SDE QTY"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+
+```{r setup, include=FALSE}
+set.seed(888)
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, out.width = '100%', 
+                      cache = TRUE, message = FALSE)
+```
+
+```{r }
+library(here)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+suppressPackageStartupMessages(library(tidylog))
+
+source(here("code", "functions.R"))
+
+theme_set(theme_minimal())
+```
+
+
+
+
+## SDE-QTY as Nfruits
+
+Load data
+
+```{r}
+Nvisits.site <- readRDS(here("data", "Nvisits.site.rds"))
+
+Pvisit.sp.Mad <- readRDS(here("data", "bc.Pvisit.sp.Madronas.rds")) %>%
+  ungroup()
+Pvisit.sp.Puntal <- readRDS(here("data", "PV.Puntal.combined.rds")) %>%
+  ungroup() %>%
+  mutate(site = "Puntal") %>%
+  relocate(site)
+
+Pfeed <- readRDS(here("data", "Pfeed.post.rds")) %>% 
+  select(-Pfeed.logit) %>% 
+  arrange(bird_sp)
+
+Nfru <- readRDS(here("data", "Nfruits_visit_post_long.rds")) %>% 
+  arrange(bird_sp)
+```
+
+Multiply:
+
+```{r}
+PV.sp.Mad <- Pvisit.sp.Mad %>% 
+  mutate(Nvisit.site = rep(Nvisits.site$visits.Mad, times = nrow(Pvisit.sp.Mad)/1000)) %>% 
+  select(site, id_plant, bird_sp, Pvisit.sp, Nvisit.site)
+
+PV.sp.Puntal <- Pvisit.sp.Puntal %>% 
+  mutate(Nvisit.site = rep(Nvisits.site$visits.Puntal, times = nrow(Pvisit.sp.Puntal)/1000)) %>% 
+  select(site, id_plant, bird_sp, Pvisit.sp = PV.combined, Nvisit.site)
+
+PV.sp <- bind_rows(PV.sp.Mad, PV.sp.Puntal)
+
+PV.sp.list <- split(PV.sp, PV.sp$bird_sp)
+
+PV.sp.etc <- lapply(PV.sp.list, add_Pfeed_Nfru_sp, pfeed = Pfeed, nfru = Nfru)
+
+PV.sp.all <- bind_rows(PV.sp.etc) 
+
+PV.sp.all <- PV.sp.all %>% 
+  mutate(Nvisit.sp = Nvisit.site*Pvisit.sp) %>% 
+  mutate(qty.fru = Nvisit.site*Pvisit.sp*Pfeed*Nfruits)
+
+saveRDS(PV.sp.all, here("analysis", "output", "SDE_QTY_Nfruits.rds"))
+
+# PV.sp.all %>% 
+#   group_by(site, id_plant, bird_sp) %>% 
+#   summarise(mean.sde.qty = round(mean(qty.fru), digits = 3)) %>% 
+#   arrange(desc(mean.sde.qty)) %>% 
+#   kable()
+```
+
+
+
+Plot number of visits:
+
+```{r}
+library(ggdist)
+
+PV.sp.all %>% 
+  ggplot() +
+  facet_wrap(~id_plant, ncol = 5) +
+  aes(x = reorder(bird_sp, Nvisit.sp), y = Nvisit.sp) +
+  stat_pointinterval(size = 1, .width = 0.50) +
+  coord_flip(ylim = c(0, 7000)) +
+  theme(axis.text.y = element_text(size = 5),
+        axis.text.x = element_text(size = 10)) +
+  labs(title = "Number of visits by each bird species to each plant",
+       subtitle = "2019-2020",
+       x = "",
+       y = "Visits",
+       caption = "Note axis has been truncated at 7000") 
+
+ggsave(here("analysis", "output", "Nvisits.sp_final.pdf"), width = 15, height = 40, units = "in")
+
+```
+
+
+
+Plot number of fruits consumed per bird species
+
+```{r}
+ggplot(Nfru) + 
+  facet_wrap(~bird_sp, ncol = 4, scales = "free") +
+  geom_histogram(aes(Nfruits), binwidth = 1) +
+  theme(axis.text.y = element_blank()) +
+  labs(x = "", y = "",
+       title = "Number of fruits consumed per visit")
+
+ggsave(here("analysis", "output", "Nfruits_visit.pdf"), width = 15, height = 30, units = "in")
+  
+```
+
+
+
+Plot total number of fruits consumed by each bird species from each plant:
+
+```{r}
+library(ggdist)
+
+PV.sp.all %>% 
+  ggplot() +
+  facet_wrap(~id_plant, ncol = 5) +
+  aes(x = reorder(bird_sp, qty.fru), y = qty.fru) +
+  stat_pointinterval(size = 1, .width = 0.50) +
+  coord_flip(ylim = c(0, 10000)) +
+  theme(axis.text.y = element_text(size = 5),
+        axis.text.x = element_text(size = 10)) +
+  labs(title = "Number of fruits consumed by each bird species from each plant",
+       subtitle = "2019-2020",
+       x = "",
+       y = "",
+       caption = "Note axis has been truncated at 10000") 
+
+ggsave(here("analysis", "output", "SDE_QTY_Nfruits.pdf"), width = 15, height = 40, units = "in")
+
+
+
+## Zoom 
+PV.sp.all %>% 
+  ggplot() +
+  facet_wrap(~id_plant, ncol = 5) +
+  aes(x = reorder(bird_sp, qty.fru), y = qty.fru) +
+  stat_pointinterval(size = 1, .width = 0.50) +
+  coord_flip(ylim = c(0, 1000)) +
+  theme(axis.text.y = element_text(size = 5),
+        axis.text.x = element_text(size = 10)) +
+  labs(title = "Number of fruits consumed by each bird species from each plant",
+       # subtitle = "",
+       x = "",
+       y = "",
+       caption = "Note axis has been truncated at 1000") 
+
+ggsave(here("analysis", "output", "SDE_QTY_Nfruits_zoom.pdf"), width = 15, height = 40, units = "in")
+```
+
+
+
+## Keep only seeds escaping seed predators
+
+For *Chloris chloris*, *Pyrrhula pyrrhula*, *Fringilla coelebs* and *Coccothraustes* that are seed predators, calculate how many of all the consumed seeds would escape predation (i.e. have any chance of producing a seedling).
+
+Load the probability of escape:
+
+```{r}
+prob.escape <- readRDS(here("data", "prob.escape.rds"))
+```
+
+For all remaining bird species, the prob. of escape is 1
+
+```{r}
+PV.sp.all <- PV.sp.all %>% 
+  group_by(site, id_plant, bird_sp) %>% 
+  mutate(prob.escape = ifelse(
+    bird_sp %in% c("Chloris chloris", "Pyrrhula pyrrhula", 
+                   "Fringilla coelebs", "Coccothraustes coccothraustes"),
+    prob.escape$prob.escape, 
+    1)) %>% 
+  ungroup() %>% 
+  mutate(qty.fru.escape = qty.fru * prob.escape)
+
+saveRDS(PV.sp.all, here("analysis", "output", "SDE_QTY_Nfruits_escape.rds"))
+```
+
+
+
+---------------
+
+```{r}
+sessioninfo::session_info()
+```
+

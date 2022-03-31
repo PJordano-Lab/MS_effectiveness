@@ -1,0 +1,314 @@
+---
+title: "Number of fruits consumed | visit"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+
+```{r setup, include=FALSE}
+set.seed(888)
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, out.width = '100%', 
+                      cache = TRUE, message = FALSE)
+```
+
+```{r Number-fruits-visit-1 }
+library(here)
+library(dplyr)
+library(ggplot2)
+library(brms)
+library(DHARMa)
+
+source(here("code", "functions.R"))
+
+theme_set(theme_minimal())
+```
+
+
+Load data
+
+```{r Number-fruits-visit-2 }
+nfrudata <- readr::read_csv(here("data", "lentisc_feeding_rates.csv"))
+```
+
+As some spp were missing from local dataset, use body mass data from EltonTraits (https://doi.org/10.6084/m9.figshare.c.3306933.v1)
+
+```{r Number-fruits-visit-3}
+elton <- readr::read_delim(here("data", "BirdFuncDat.txt"), delim = "\t") %>% 
+  select(bird_sp = Scientific, bmass.elton = `BodyMass-Value`) %>% 
+  mutate(bird_sp = ifelse(bird_sp == "Parus caeruleus", "Cyanistes caeruleus", bird_sp),
+         bird_sp = ifelse(bird_sp == "Cyanopica cyanus", "Cyanopica cooki", bird_sp),
+         bird_sp = ifelse(bird_sp == "Saxicola torquatus", "Saxicola rubicola", bird_sp),
+         bird_sp = ifelse(bird_sp == "Carduelis chloris", "Chloris chloris", bird_sp))
+
+nfrudata <- nfrudata %>% 
+  left_join(elton) %>% 
+  mutate(log.bodym.Dg = log(bmass.elton/10) - log(2)) # convert to Dg, take log, and center on 2Dg bird
+
+```
+
+
+## EDA
+
+Number of fruits consumed per species:
+
+```{r Number-fruits-visit-4}
+
+nfrudata %>% 
+  group_by(diet, bird_sp) %>% 
+  summarise(mean(no_fruits), 
+            sd(no_fruits), 
+            n()) %>% 
+  kable(digits = 2)
+
+nfrudata %>% 
+  ggplot() +
+  facet_wrap(~bird_sp, scales = "free") +
+  geom_histogram(aes(no_fruits))
+```
+
+
+Relationship with body mass:
+
+```{r Number-fruits-visit-5}
+sort(round(unique((nfrudata$bodymass))))
+
+nfrudata %>% 
+  filter(bird_sp != "Chloris chloris") %>%
+  ggplot() +
+  geom_point(aes(log(bmass.elton), log(no_fruits)))
+
+```
+
+
+We're modelling *Chloris chloris* separately as eager seed predator. The remaining species consume typically 2-3-4 fruits/visit.
+
+
+
+
+## Model all species except Chloris
+
+```{r Number-fruits-visit-6 }
+nfrudata.redux <- nfrudata %>% 
+  filter(bird_sp != "Chloris chloris") 
+```
+
+
+Prior predictive check:
+
+```{r Number-fruits-visit-7 }
+# Using negbinomial as there is overdispersion 
+# Also, truncated at 1 (no 0 counts in dataset)
+nfru.formu <- brmsformula(no_fruits | trunc(lb = 1) ~ (1 | bird_sp) + log.bodym.Dg,
+                         family = negbinomial())
+
+get_prior(nfru.formu, data = nfrudata.redux)
+
+# priors (log scale)
+# log(2) = 0.7  # 2 fruits/visit as grand mean
+priors <- c(
+  set_prior("normal(0.7, 0.3)", class = "Intercept"), 
+  set_prior("normal(0.5, 0.5)", class = "b"),
+  set_prior("normal(0, 0.5)", class = "sd")
+)
+
+```
+
+Fit model:
+
+```{r Number-fruits-visit-8 }
+
+nfru.m <- brm(nfru.formu,
+         data = nfrudata.redux,
+         prior = priors,
+         cores = 4,
+         iter = 4000,
+         refresh = 0, 
+         control = list(adapt_delta = 0.95))
+
+
+pp_check(nfru.m, nsamples = 100)
+pp_check(nfru.m, nsamples = 100) + xlim(0,10)
+
+bayestestR::check_prior(nfru.m)
+
+summary(nfru.m, priors = TRUE)
+
+plot(nfru.m)
+
+stancode(nfru.m)
+
+coef(nfru.m)
+
+#DHARMa
+nfru.check <- check_brms(nfru.m, integer = TRUE)
+plot(nfru.check, form = nfrudata.redux$bird_sp)
+testDispersion(nfru.check)
+
+saveRDS(nfru.m, here("analysis", "output", "nfru_visit_model.rds"))
+
+```
+
+
+### Predict
+
+Add species without feeding observations:
+
+```{r Number-fruits-visit-9}
+pfeed.post <- readRDS(here("data", "Pfeed.post.rds"))
+pfeed.sp <- sort(unique(pfeed.post$bird_sp))
+
+nfru.sp <- sort(unique(nfrudata$bird_sp))
+
+sp.new <- pfeed.sp[!pfeed.sp %in% nfru.sp]
+sp.new
+
+newdat <- data.frame(bird_sp = sort(c(unique(nfrudata.redux$bird_sp), 
+                                      sp.new)))
+
+# Add bodymass data for these spp
+newdat <- newdat %>% 
+  left_join(elton) %>% 
+  mutate(log.bodym.Dg = log(bmass.elton/10) - log(2)) # convert to Dg, take log, and center on 2Dg bird
+
+```
+
+
+```{r Number-fruits-visit-10 }
+## Full posterior distributions
+nfru.post <- posterior_predict(nfru.m, 
+                                newdata = newdat,
+                                nsamples = 1000,
+                                allow_new_levels = TRUE, 
+                               ntrys = 20) %>% 
+  as.data.frame() %>%
+  setNames(newdat$bird_sp)
+
+nfru.post.long <- nfru.post %>% 
+  tidyr::pivot_longer(cols = everything(), names_to = "bird_sp", values_to = "Nfruits") 
+
+nfru.post.long %>% 
+  group_by(bird_sp) %>% 
+  summarise(mean(Nfruits), sd(Nfruits)) %>% 
+  arrange(desc(`mean(Nfruits)`)) %>% 
+  kable(digits = 2)
+
+# saveRDS(nfru.post.long, here("analysis", "output", "nfruits.post.long.rds"))
+
+```
+
+
+
+
+
+-----
+
+
+
+
+## Model *Chloris chloris* independently
+
+```{r Number-fruits-visit-11 }
+chloris <- nfrudata %>% 
+  filter(bird_sp == "Chloris chloris")
+
+chloris$row <- 1:nrow(chloris)
+```
+
+
+Prior predictive check:
+
+```{r Number-fruits-visit-12 }
+# Using negbinomial as there is overdispersion 
+# Also, truncated at 1 (no 0 counts in dataset)
+nfru.c.formu <- brmsformula(no_fruits | trunc(lb = 1) ~ 1,
+                         family = negbinomial())
+
+get_prior(nfru.c.formu, data = chloris)
+
+# priors (log scale)
+# exp(2) = 7.4
+priors <- c(
+  set_prior("normal(2, 0.5)", class = "Intercept")
+)
+
+
+```
+
+Fit model:
+
+```{r Number-fruits-visit-13 }
+
+nfru.c.m <- brm(nfru.c.formu,
+         data = chloris,
+         prior = priors,
+         cores = 4,
+         iter = 4000,
+         refresh = 0)
+
+
+pp_check(nfru.c.m, nsamples = 100)
+pp_check(nfru.c.m, nsamples = 100) + xlim(0, 50)
+bayesplot::ppc_rootogram(y = chloris$no_fruits, 
+                         yrep = posterior_predict(nfru.c.m, nsamples = 1000)) + xlim(0,50)
+
+bayestestR::check_prior(nfru.c.m)
+
+summary(nfru.c.m, priors = TRUE)
+
+plot(nfru.c.m)
+
+stancode(nfru.c.m)
+
+# coef(nfru.c.m)
+fixef(nfru.c.m)
+# ranef(nfru.m)
+
+# mcmc_plot(nfru.m, pars = "id_plant")
+# launch_shinystan(nfru.m)
+
+#DHARMa
+nfru.c.check <- check_brms(nfru.c.m, integer = TRUE)
+testDispersion(nfru.c.check)
+
+saveRDS(nfru.c.m, here("analysis", "output", "nfru_visit_Chloris_model.rds"))
+
+```
+
+
+### Predict
+
+
+```{r Number-fruits-visit-14 }
+## Full posterior distributions
+nfru.c.post <- posterior_predict(nfru.c.m, 
+                               newdata = data.frame(bird_sp = "Chloris chloris"),
+                               nsamples = 1000,
+                               ntrys = 20
+                               ) %>% 
+  as.data.frame() %>%
+  setNames("Nfruits") %>% 
+  bind_cols(bird_sp = "Chloris chloris") %>% 
+  relocate(bird_sp)
+
+summary(nfru.c.post$Nfruits)
+
+```
+
+
+
+## Combine Chloris with other spp
+
+```{r Number-fruits-visit-15}
+nfru.post.long <- bind_rows(nfru.post.long, nfru.c.post)
+
+nfru.post.long %>% 
+  group_by(bird_sp) %>% 
+  summarise(mean(Nfruits), sd(Nfruits), 
+            max(Nfruits), q95 = round(quantile(Nfruits, probs = 0.95))) %>% 
+  arrange(desc(`mean(Nfruits)`)) %>% 
+  kable(digits = 2)
+
+saveRDS(nfru.post.long, here("analysis", "output", "Nfruits_visit_post_long.rds"))
+```
+

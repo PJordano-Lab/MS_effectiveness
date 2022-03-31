@@ -1,0 +1,239 @@
+---
+title: "SDE QUALITY"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+
+```{r setup, include=FALSE}
+set.seed(888)
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, out.width = '100%', 
+                      cache = TRUE, message = FALSE)
+```
+
+```{r }
+library(here)
+library(readr)
+library(dplyr)
+library(ggplot2)
+suppressPackageStartupMessages(library(tidylog))
+
+source(here("code", "functions.R"))
+
+theme_set(theme_minimal())
+```
+
+
+----
+
+Load components:
+
+```{r}
+seeds.mh <- readRDS(here("data", "Pdisperse.bird.mh.rds"))
+pred.mh <- readRDS(here("data", "pred.mh.post.long.rds"))
+surv.mh <- readRDS(here("data", "surv.mh.post.rds"))
+```
+
+
+Join data:
+
+```{r}
+n.mh.bird <- length(unique(seeds.mh$mh))*length(unique(seeds.mh$bird_sp)) 
+# 5 mh * 27 bird spp = 135
+
+qlty <- seeds.mh %>% 
+  mutate(Prob.escape.rodent.pred = case_when(
+    mh == "FR" ~ rep(pred.mh$Prob.escaping.pred[pred.mh$mh == "FR"], times = n.mh.bird),
+    mh == "NF" ~ rep(pred.mh$Prob.escaping.pred[pred.mh$mh == "NF"], times = n.mh.bird),
+    mh == "OA" ~ rep(pred.mh$Prob.escaping.pred[pred.mh$mh == "OA"], times = n.mh.bird),
+    mh == "PL" ~ rep(pred.mh$Prob.escaping.pred[pred.mh$mh == "PL"], times = n.mh.bird),
+    mh == "PP" ~ rep(pred.mh$Prob.escaping.pred[pred.mh$mh == "PP"], times = n.mh.bird)
+  )) %>% 
+  mutate(Prob.seedling.surv = case_when(
+    mh == "FR" ~ rep(surv.mh$surv.avg[surv.mh$mh == "FR"], times = n.mh.bird),
+    mh == "NF" ~ rep(surv.mh$surv.avg[surv.mh$mh == "NF"], times = n.mh.bird),
+    mh == "OA" ~ rep(surv.mh$surv.avg[surv.mh$mh == "OA"], times = n.mh.bird),
+    mh == "PL" ~ rep(surv.mh$surv.avg[surv.mh$mh == "PL"], times = n.mh.bird),
+    mh == "PP" ~ rep(surv.mh$surv.avg[surv.mh$mh == "PP"], times = n.mh.bird)
+  )) %>% 
+  mutate(Prob.recruit.mh = Prob.escape.rodent.pred * Prob.seedling.surv) %>% 
+  mutate(Prob.bird.recruit.mh = Prob.bird.mh * Prob.recruit.mh) %>% 
+  select(bird_sp, mh, Prob.escape.rodent.pred, Prob.seedling.surv, Prob.recruit.mh,
+         Prob.bird.disperse.mh = Prob.bird.mh, Prob.bird.recruit.mh)
+
+```
+
+
+```{r}
+# Median
+qlty %>% 
+  group_by(mh) %>% 
+  summarise(median(Prob.escape.rodent.pred), median(Prob.seedling.surv), median(Prob.recruit.mh))
+
+# Mean
+qlty %>% 
+  group_by(mh) %>% 
+  summarise(mean(Prob.escape.rodent.pred), mean(Prob.seedling.surv), mean(Prob.recruit.mh))
+
+qlty %>% 
+  group_by(mh) %>% 
+  summarise(`escaping rodent predation` = mean(Prob.escape.rodent.pred), 
+            `seedling survival` = mean(Prob.seedling.surv), 
+            total = mean(Prob.recruit.mh)) %>% 
+  pivot_longer(cols = -mh, names_to = "stage", values_to = "Probability") %>% 
+  ggplot() +
+  geom_line(aes(stage, Probability, group = mh, colour = mh), size = 2) 
+
+
+ggplot(pred.mh) +
+  geom_density(aes(Prob.escaping.pred), fill = "lightgrey") +
+  facet_wrap(~mh, ncol = 1, scales = "free_y") +
+  coord_cartesian(xlim = c(0, 0.05)) +
+  theme(axis.text.y = element_blank()) +
+  labs(title = "Probability of escaping rodent predation in each MH",
+       x = "", y = "")
+
+ggplot(surv.mh) +
+  geom_density(aes(surv.avg), fill = "lightgrey") +
+  facet_wrap(~mh, ncol = 1, scales = "free_y") +
+  coord_cartesian(xlim = c(0, 0.1)) +
+  theme(axis.text.y = element_blank()) +
+  labs(title = "Probability of seedling surviving their 1st summer",
+       x = "", y = "")
+```
+
+
+## Adjust SDE-QLTY for some species
+
+
+### Keep only seeds escaping seed predators
+
+For Chloris chloris, Pyrrhula pyrrhula, Fringilla coelebs and Coccothraustes that are seed predators, calculate how many of all the consumed seeds would escape predation (i.e. have any chance of producing a seedling).
+
+Load the probability of escape:
+
+```{r}
+prob.escape <- readRDS(here("data", "prob.escape.rds"))
+```
+
+For all remaining bird species, the prob. of escape is 1
+
+```{r}
+qlty <- qlty %>% 
+  group_by(bird_sp) %>% 
+  mutate(Prob.escape.bird.pred = ifelse(
+    bird_sp %in% c("Chloris chloris", "Pyrrhula pyrrhula", 
+                   "Fringilla coelebs", "Coccothraustes coccothraustes"),
+    rep(prob.escape$prob.escape, times = 5),  # 5 microhabitats 
+    1)) %>% 
+  ungroup() %>% 
+  mutate(qlty.mh = Prob.escape.bird.pred * Prob.bird.recruit.mh)
+```
+
+
+
+*Columba palumbus* destroys all seeds in their gut.
+
+*Cyanistes caeruleus* & *Parus major* are pulp predators. We assume here they don't drop/disperse any seed, so their SDE-QLTY is 0.
+
+
+```{r}
+qlty <- qlty %>% 
+  mutate(qlty.mh = ifelse(bird_sp == "Columba palumbus", 0, qlty.mh),
+         qlty.mh = ifelse(bird_sp == "Cyanistes caeruleus", 0, qlty.mh),
+         qlty.mh = ifelse(bird_sp == "Parus major", 0, qlty.mh))
+```
+
+
+
+
+```{r}
+# Do Prob. of dispersal to each MH adds up to 1 for each bird species?
+qlty %>% 
+ group_by(bird_sp) %>% 
+ summarise(sum(Prob.bird.disperse.mh)) %>% 
+  kable()
+
+
+# Prob. dispersing to each MH per bird species
+qlty %>% 
+  group_by(bird_sp, mh) %>% 
+  summarise(median(Prob.bird.disperse.mh)) %>% 
+  kable(digits = 2)
+
+# Prob., for each bird species, of delivering an entire seed to each MH and producing a seedling surviving their 1st summer. 
+qlty %>% 
+  group_by(bird_sp, mh) %>% 
+  summarise(median(qlty.mh)) %>% 
+  kable()
+
+
+
+# Median:
+qlty %>% 
+  group_by(bird_sp) %>% 
+  summarise(median(qlty.mh)) %>% 
+  kable()
+
+# Mean:
+qlty %>% 
+  group_by(bird_sp) %>% 
+  summarise(mean(qlty.mh)) %>% 
+  kable()
+```
+
+
+
+
+## Calculate overall probability of producing a recruit for each bird species (across all MH)
+
+```{r}
+sde.qlt <- qlty %>% 
+  select(bird_sp, mh, qlty.mh) %>% 
+  pivot_wider(names_from = "mh", values_from = "qlty.mh") %>% 
+  tidyr::unnest(cols = c(FR, NF, OA, PL, PP)) %>% 
+  mutate(P.recruit = FR + NF + OA + PL + PP)
+
+sde.qlt %>% 
+  group_by(bird_sp) %>% 
+  summarise(median(P.recruit)) %>% 
+  kable()
+```
+
+
+```{r}
+sde.qlt %>% 
+  filter(! bird_sp %in% c("Columba palumbus", "Cyanistes caeruleus", "Parus major")) %>% 
+  ggplot() +
+  geom_density(aes(P.recruit), fill = "lightgrey") +
+  facet_wrap(~bird_sp, scales = "free_y") +
+  coord_cartesian(xlim = c(0, 0.001)) +
+  theme(axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 6)) +
+  labs(x = "Probability of producing a recruit per dispersed seed") 
+
+
+library(ggdist)
+
+sde.qlt %>% 
+  ggplot() +
+  stat_pointinterval(aes(P.recruit, reorder(bird_sp, P.recruit, FUN = median))) +
+  labs(title = "Seed disperser effectiveness (QUALITY component)",
+       subtitle = "\nPosterior probability that a seed dispersed by each bird species\nproduces a seedling that survives their first summer\n",
+       x = "\nProbability of producing a recruit",
+       y = "",
+       caption = "Points represent the median. Intervals represent 0.66 and 0.95 credibility intervals")
+```
+
+
+```{r}
+saveRDS(qlty, here("analysis", "output", "SDE_QLTY_mh.rds"))
+saveRDS(sde.qlt, here("analysis", "output", "SDE_QLTY_total.rds"))
+```
+
+
+```{r}
+sessioninfo::session_info()
+```
+

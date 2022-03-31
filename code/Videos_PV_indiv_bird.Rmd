@@ -1,0 +1,533 @@
+---
+title: "Calculating Probability of bird visit from videos (only for Puntal)"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+set.seed(888)
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, out.width = '100%', cache = TRUE, message = FALSE)
+```
+
+```{r SDE-QTY-PV-Videos-1 }
+library(here)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(brms)
+library(DHARMa)
+library(ggdist)
+
+source(here("code", "functions.R"))
+
+theme_set(theme_minimal())
+```
+
+Load data:
+
+```{r SDE-QTY-PV-Videos-2 }
+camdata <- readr::read_csv(here("data", "cam_indiv_lentisc.csv"))
+camdata
+glimpse(camdata)
+camdata$site <- "Puntal"
+```
+
+
+```{r SDE-QTY-PV-Videos-3, results = "asis"}
+summarytools::dfSummary(camdata, plain.ascii = FALSE, style = "grid", valid.col = FALSE)
+```
+
+
+## Calculating the QUANTITY component of Seed Dispersal Effectiveness (SDE)
+
+
+### 1. Nvisit
+
+Here we estimate the number of bird visits to each individual plant (per hour of recording) over the whole fruiting season. 
+
+So far we count all visits without considering if there was consumption or not.
+
+
+#### 1.1 Prepare data for model & EDA
+
+Number of recording hours per individual:
+
+```{r SDE-QTY-PV-Videos-4}
+rectime.indiv <- camdata %>% 
+  group_by(id_plant) %>% 
+  distinct(date_recording, .keep_all = TRUE) %>% 
+  summarise(rec_time_indiv = sum(rec_time_hours)) 
+
+ggplot(rectime.indiv) +
+  geom_col(aes(reorder(id_plant, rec_time_indiv), rec_time_indiv)) +
+  coord_flip() +
+  labs(x = "Individual", y = "Total recording hours")
+
+camdata <- camdata %>% 
+  left_join(rectime.indiv)
+  
+```
+
+
+Recorded visits per individual lentisc:
+
+```{r SDE-QTY-PV-Videos-5, fig.height=5}
+camdata.visits <- camdata %>% 
+  filter(!is.na(bird_sp)) %>%  # NA means no visit at all in that recording session
+  group_by(id_plant, rec_time_indiv) %>% 
+  summarise(visits.ind = n()) %>%  # including 'unknown' = unidentified bird
+  arrange(desc(visits.ind))
+  
+
+ggplot(camdata.visits) +
+  geom_col(aes(reorder(id_plant, visits.ind), visits.ind)) +
+  coord_flip() +
+  labs(x = "Individual", y = "Number of visits", 
+       title = "Number of recorded bird visits over the 2019-20 season",
+       subtitle = "Puntal site")
+```
+
+
+Number of visits per bird species throughout the period:
+
+```{r SDE-QTY-PV-Videos-6, fig.height=6}
+camdata %>% 
+  group_by(bird_sp, cam_period) %>% 
+  summarise(nvisit = n()) %>% 
+  ggplot() +
+  facet_wrap(~bird_sp) + 
+  geom_col(aes(cam_period, nvisit)) +
+  theme(strip.text = element_text(size = 8))
+```
+
+
+
+
+#### 1.2 Model
+
+Using Poisson to model Nvisits per plant per hour of recording:
+
+```{r Nvisit-formu}
+
+# rate(rec_time_indiv) = offset(log(rec_time_indiv)), see ?bf
+Nvisit.formu <- brmsformula(visits.ind | rate(rec_time_indiv) ~  
+                             (1 | id_plant), 
+                            family = poisson())
+
+get_prior(Nvisit.formu, data = camdata.visits)
+
+## priors (log scale)
+# exp(1.4) = 4.05 visits/h
+# plot(density(rlnorm(1000, 1.4, 1)))
+priors <- c(
+  set_prior("normal(1.4, 1)", class = "Intercept"), 
+  set_prior("normal(0, 1)", class = "sd")
+)
+
+```
+
+
+Prior predictive check:
+
+```{r Nvisit-ppc}
+
+Nvisit.m <- brm(Nvisit.formu,
+         data = camdata.visits,
+         prior = priors,
+         sample_prior = "only",
+         cores = 4,
+         iter = 2000,
+         refresh = 0)
+
+# stancode(Nvisit.m)
+pp_check(Nvisit.m, nsamples = 100) + coord_cartesian(xlim = c(0, 500))
+summary(Nvisit.m, priors = TRUE)
+plot(Nvisit.m)
+```
+
+
+
+Fit model:
+
+```{r Nvisit-fit}
+Nvisit.m <- brm(Nvisit.formu,
+         data = camdata.visits,
+         prior = priors,
+         # sample_prior = "only",
+         cores = 4,
+         iter = 4000,
+         refresh = 0)
+
+```
+
+
+```{r Nvisit-check}
+
+pp_check(Nvisit.m, nsamples = 100)
+bayesplot::ppc_rootogram(y = camdata.visits$visits.ind, 
+                         yrep = posterior_predict(Nvisit.m, nsamples = 1000))
+# pp_check(Nvisit.m, nsamples = 100, type = "error_scatter_avg")
+bayestestR::check_prior(Nvisit.m)
+
+summary(Nvisit.m, priors = TRUE)
+
+plot(Nvisit.m)
+
+stancode(Nvisit.m)
+
+# coef(Nvisit.m)
+fixef(Nvisit.m)
+lapply(ranef(Nvisit.m), round, digits = 3)
+
+#mcmc_plot(Nvisit.m, pars = "id_plant")
+# launch_shinystan(Nvisit.m)
+
+#DHARMa
+Nvisit.check <- check_brms(Nvisit.m, integer = TRUE)
+testDispersion(Nvisit.check)
+
+saveRDS(Nvisit.m, here("analysis", "output", "cam.Nvisit.model.rds"))
+
+```
+
+
+
+Predict:
+
+```{r SDE-QTY-PV-Videos-11 }
+## Full posterior distributions
+cam.visits.post <- posterior_predict(Nvisit.m, 
+                                    newdata = data.frame(
+                                    id_plant = camdata.visits$id_plant,
+                                    rec_time_indiv = 1),
+                                    nsamples = 1000) %>% 
+  as.data.frame() %>%
+  setNames(unique(camdata.visits$id_plant))
+
+cam.visits.post.long <- cam.visits.post %>% 
+  tidyr::pivot_longer(cols = everything(), names_to = "id_plant", values_to = "visits") %>% 
+  mutate(id_plant = as.numeric(id_plant)) %>% 
+  right_join(select(camdata.visits, id_plant), by = "id_plant") %>% 
+  arrange(id_plant) %>% 
+  mutate(id_plant = as.character(id_plant))
+
+saveRDS(cam.visits.post.long, here("analysis", "output", "cam.indiv.Puntal.Nvisits.post.long.rds"))
+
+```
+
+
+Sum total number of fruits for each iteration to calculate prop of visit to each individual:
+
+```{r }
+cam.Pvisit.post <- Nvisit2Pvisit(cam.visits.post, tidy = TRUE) %>% 
+  left_join(select(camdata.visits, id_plant), by = "id_plant") %>% 
+  arrange(id_plant)
+
+cam.Pvisit.post %>% 
+  group_by(id_plant) %>% 
+  summarise(mean(Pvisit)) %>% 
+  arrange(desc(`mean(Pvisit)`)) %>% 
+  kable(digits = 2)
+
+saveRDS(cam.Pvisit.post, here("analysis", "output", 
+                                paste0("cam.indiv.Puntal.Pvisit.post.long.rds")))
+
+```
+
+
+
+Plot:
+
+```{r SDE-QTY-PV-Videos-12 }
+
+cam.visits.post.long %>% 
+  group_by(id_plant) %>% 
+  ggplot() +
+  aes(x = reorder(id_plant, visits), y = visits) +
+  stat_gradientinterval() +
+  coord_flip() +
+  labs(x = "Plant", y = "Visits/h")
+
+ggsave(here("analysis", "output", "cam.visits.post.pdf"), 
+       device = "pdf", width = 9, height = 11, units = "in")
+```
+
+
+
+------------------------------------------------------------------
+
+### 2. Pbird: Probability of visit by each bird species at each plant
+
+#### 2.1 Prepare data
+
+Get number of visits per bird species per plant. 
+
+We remove the unknown (unidentified birds) for both the numerator and denominator as they could be any bird species. 
+
+
+```{r SDE-QTY-PV-Videos-13 }
+camdata.visits.sp <- camdata %>% 
+  filter(!is.na(bird_sp)) %>%  # Video without any visit observed
+  filter(bird_sp != "unknown") %>% 
+  group_by(id_plant, rec_time_indiv, bird_sp) %>% 
+  summarise(visits.bird.plant = n()) %>% 
+  ungroup() %>% 
+  mutate(site = "Puntal_cam") %>% 
+  relocate(site)
+```
+
+
+Add interactions that were observed in barcoding but not in videos (only in Puntal):
+
+```{r Barcoding-PV-indiv-bird-19}
+bcdata <- readr::read_csv(here("data", "bc_indiv_lentisc.csv")) %>% 
+  filter(site == "Puntal")
+
+bc.only <- bcdata %>% 
+  select(id_plant, bird_sp) %>% 
+  filter(!is.na(bird_sp), bird_sp != "unknown") %>% 
+  distinct() %>% 
+  anti_join(select(camdata.visits.sp, id_plant, bird_sp)) %>% 
+  mutate(site = "Puntal_bc", 
+         visits.bird.plant = 0) %>% 
+  left_join(distinct(select(camdata.visits.sp, id_plant, rec_time_indiv)), by = "id_plant")
+
+kable(select(bc.only, id_plant, bird_sp))
+
+camdata.visits.sp <- full_join(camdata.visits.sp, bc.only)
+```
+
+
+
+Add other unobserved interactions (value = 0):
+
+```{r}
+all.int <- expand.grid(id_plant = sort(unique(camdata.visits.sp$id_plant)), 
+                       bird_sp = sort(unique(camdata.visits.sp$bird_sp)), 
+                       stringsAsFactors = FALSE)
+
+unobs <- anti_join(all.int, select(camdata.visits.sp, id_plant, bird_sp)) %>% 
+    mutate(site = "Puntal_unobs", 
+           visits.bird.plant = 0) %>% 
+  relocate(site) %>% 
+  left_join(distinct(select(camdata.visits.sp, id_plant, rec_time_indiv)), by = "id_plant") %>% 
+  relocate(rec_time_indiv, .before = bird_sp)
+
+camdata.visits.sp <- full_join(camdata.visits.sp, unobs)
+```
+
+
+
+
+
+Calculate total number of **identified** visits per plant: 
+
+```{r}
+
+camdata.visits.id <- camdata.visits.sp %>% 
+  group_by(id_plant) %>% 
+  summarise(visits.plant.total = sum(visits.bird.plant)) %>%  
+  arrange(desc(visits.plant.total))
+
+camdata.visits.sp <- camdata.visits.sp %>% 
+  left_join(camdata.visits.id, by = "id_plant") %>% 
+  mutate(visits.bird.plant.prop = visits.bird.plant/visits.plant.total) %>% 
+  ungroup() %>% 
+  arrange(id_plant, bird_sp)
+
+camdata.visits.sp$row <- 1:nrow(camdata.visits.sp)
+
+```
+
+
+Number of visits per bird species: 
+
+```{r SDE-QTY-PV-Videos-14 }
+camdata.visits.sp %>% 
+  group_by(bird_sp) %>% 
+  summarise(suma = sum(visits.bird.plant)) %>% 
+  arrange(desc(suma)) %>% 
+  kable()
+```
+
+
+
+
+#### 2.2 Model
+
+Prior predictive check:
+
+```{r Pbird-formu}
+
+Pbird.formu <- bf(visits.bird.plant | trials(visits.plant.total) ~
+                    (1 | bird_sp) + (1 | id_plant) + 
+                    (1 | bird_sp:id_plant),
+                  family = binomial())
+
+get_prior(Pbird.formu, data = camdata.visits.sp)
+
+# priors (logit scale)
+
+# 1/26 bird species = 0.038
+
+# plogis(-2) = 0.12   
+# plogis(-3) = 0.047
+# plogis(-1) = 0.27
+# plogis(-4) = 0.018
+# plogis(0) = 0.5
+priors <- c(
+  set_prior("normal(-6.5, 1)", class = "Intercept"), 
+  set_prior("normal(0, 3)", class = "sd")
+)
+```
+
+Prior predictive check:
+
+```{r Pbird-ppc}
+Pbird.m <- brm(Pbird.formu,
+         data = camdata.visits.sp,
+         prior = priors,
+         sample_prior = "only",
+         cores = 4,
+         iter = 2000,
+         refresh = 0)
+
+# stancode(Nvisit.m)
+# pp_check(Pbird.m, nsamples = 100)
+pp_check(Pbird.m, nsamples = 100) + coord_cartesian(xlim = c(0, 5))
+summary(Pbird.m, priors = TRUE)
+plot(Pbird.m)
+
+```
+
+
+Fit model:
+
+```{r Pbird-fit}
+Pbird.m <- brm(Pbird.formu,
+         data = camdata.visits.sp,
+         prior = priors,
+         cores = 4,
+         iter = 4000,
+         refresh = 0)
+```
+
+
+Check:
+
+```{r Pbird-check}
+pp_check(Pbird.m, nsamples = 100)
+pp_check(Pbird.m, nsamples = 100) + coord_cartesian(xlim = c(0, 5))
+pp_check(Pbird.m, nsamples = 100, type = "bars") + coord_cartesian(xlim = c(0, 5))
+# pp_check(Pvisit.m, nsamples = 100, type = "error_scatter_avg")
+suppressWarnings(bayestestR::check_prior(Pbird.m))
+
+summary(Pbird.m, priors = TRUE)
+
+plot(Pbird.m)
+
+stancode(Pbird.m)
+
+lapply(coef(Pbird.m), head)
+fixef(Pbird.m)
+# ranef(Pbird.m)
+
+# mcmc_plot(Pbird.m, pars = "id_plant")
+# launch_shinystan(Pvisit.m)
+
+#DHARMa
+Pbird.check <- check_brms(Pbird.m, integer = TRUE)
+plot(Pbird.check, form = camdata.visits.sp$bird_sp)
+plot(Pbird.check, form = camdata.visits.sp$id_plant)
+testDispersion(Pbird.check)
+
+saveRDS(Pbird.m, here("analysis", "output", "cam.Pbird.model.rds"))
+```
+
+
+
+Predict:
+
+```{r SDE-QTY-PV-Videos-17 }
+
+## Full posterior distributions
+only.obs <- filter(camdata.visits.sp, site != "Puntal_unobs")
+
+cam.Pbird.post <- posterior_linpred(Pbird.m, 
+                                    newdata = only.obs,
+                                    nsamples = 1000) %>% 
+  as.data.frame() %>%
+  setNames(paste(only.obs$id_plant, only.obs$bird_sp, sep = "_")) %>% 
+  tidyr::pivot_longer(cols = everything(), names_to = "plant.bird", values_to = "Pbird.logit") %>% 
+  tidyr::separate(plant.bird, c("id_plant", "bird_sp"), sep = "_") %>% 
+  mutate(id_plant = as.numeric(id_plant)) %>% 
+  left_join(distinct(select(only.obs, id_plant)), by = "id_plant") %>% 
+  arrange(id_plant, bird_sp) %>% 
+  mutate(id_plant = as.character(id_plant)) %>% 
+  mutate(Pbird = plogis(Pbird.logit))
+
+saveRDS(cam.Pbird.post, here("analysis", "output", "cam.Pbird.post.rds"))
+
+cam.Pbird.post %>% 
+  group_by(id_plant, bird_sp) %>% 
+  summarise(mean.Pbird = mean(Pbird)) %>% 
+  arrange(id_plant, desc(mean.Pbird)) %>% 
+  kable(digits = 2)
+
+```
+
+
+
+
+# Plots
+
+
+```{r SDE-QTY-PV-Videos-20, fig.height=6}
+
+plot_Pbird_plant(pop = "Puntal", df = cam.Pbird.post, bc.cam = "cam")
+
+plot_Pbird_bird(pop = "Puntal", df = cam.Pbird.post, bc.cam = "cam")
+
+```
+
+
+
+### 3. Calculate Pvisit for each bird at each plant
+
+The number of visits from each bird species to each individual plant can be calculated as the product of the total visits to each plant X Probability that a visit is by a particular species (i.e. multiply posterior of model 1 and model 2)
+
+```{r SDE-QTY-PV-Videos-21 }
+# Nvisit <- readRDS(here("analysis", "output", "cam.visits.post.rds"))
+Pvisit <- readRDS(here("analysis", "output", "cam.indiv.Puntal.Pvisit.post.long.rds"))
+Pbird <- readRDS(here("analysis", "output", "cam.Pbird.post.rds"))
+```
+
+
+```{r SDE-QTY-PV-Videos-23 }
+
+Pbird.list <- split(select(Pbird, -Pbird.logit), ~id_plant)
+
+Pvisit.sp.list <- lapply(Pbird.list, mutiply_PVindiv_Pbird, Pvis = Pvisit)
+
+Pvisit.sp <- bind_rows(Pvisit.sp.list) %>% 
+  rename(PVindiv = Pv) %>% 
+  relocate(PVindiv, .before = Pbird)
+
+saveRDS(Pvisit.sp, here("analysis", "output", "cam.Pvisit.sp.Puntal.rds"))
+```
+
+
+
+```{r SDE-QTY-PV-Videos-25, fig.height=7}
+plot_PV_plant(pop = "Puntal", df = Pvisit.sp, bc.cam = "cam")
+```
+
+
+-------------------------------------------------
+
+```{r}
+sessioninfo::session_info()
+```
+
+

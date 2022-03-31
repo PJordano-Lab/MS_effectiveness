@@ -1,0 +1,169 @@
+---
+title: "Merging Probability of bird visit from videos and barcoding (only for Puntal)"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+set.seed(888)
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, out.width = '100%', fig.height = 15,
+                      cache = TRUE, message = FALSE)
+```
+
+```{r SDE-QTY-PV-merge-Puntal-1 }
+library(here)
+library(dplyr)
+library(ggplot2)
+library(ggridges)
+library(ggdist)
+
+theme_set(theme_minimal())
+```
+
+
+## Load PV
+
+```{r SDE-QTY-PV-merge-Puntal-2}
+cam <- readRDS(here("data", "cam.Pvisit.sp.Puntal.rds")) %>% 
+  mutate(site = "Puntal") %>% 
+  relocate(site, .before = id_plant)
+
+bc <- readRDS(here("data", "bc.Pvisit.sp.Puntal.rds")) 
+```
+
+
+Barcoding PV:
+
+```{r SDE-QTY-PV-merge-Puntal-3}
+bc %>% 
+  ggplot() +
+  aes(x = Pvisit.sp, y = bird_sp) +
+  facet_wrap(~id_plant, ncol = 5) +
+  geom_density_ridges(rel_min_height = 0.01) +
+  theme(axis.text.y = element_text(size = 4))
+
+
+bc %>% 
+  ggplot() +
+  facet_wrap(~id_plant, ncol = 5) +
+  aes(x = reorder(bird_sp, Pvisit.sp), y = Pvisit.sp) +
+  stat_gradientinterval(size = 1) +
+  coord_flip() +
+  theme(axis.text.y = element_text(size = 3))
+```
+
+
+Cameras PV:
+
+```{r SDE-QTY-PV-merge-Puntal-4}
+cam %>% 
+  ggplot() +
+  aes(x = Pvisit.sp, y = bird_sp) +
+  facet_wrap(~id_plant, ncol = 5) +
+  geom_density_ridges(rel_min_height = 0.01) +
+  theme(axis.text.y = element_text(size = 4)) +
+  xlim(0, 0.06)
+
+cam %>% 
+  ggplot() +
+  facet_wrap(~id_plant, ncol = 5) +
+  aes(x = reorder(bird_sp, Pvisit.sp), y = Pvisit.sp) +
+  stat_gradientinterval(size = 1) +
+  coord_flip() +
+  theme(axis.text.y = element_text(size = 3))
+```
+
+
+## Join datasets
+
+```{r SDE-QTY-PV-merge-Puntal-5}
+bc.Puntal <- bc %>% 
+  select(-site, -Pbird, -PVindiv) %>% 
+  rename(Pvisit.sp.bc = Pvisit.sp) %>% 
+  arrange(id_plant, bird_sp) %>% 
+  ungroup()
+
+cam.Puntal <- cam %>% 
+  select(id_plant, bird_sp, Pvisit.sp.cam = Pvisit.sp) %>% 
+  arrange(id_plant, bird_sp) %>% 
+  ungroup()
+
+
+fulldata <- bind_cols(bc.Puntal, select(cam.Puntal, Pvisit.sp.cam))
+```
+
+
+
+
+## Visualise both PV
+
+```{r SDE-QTY-PV-merge-Puntal-6}
+fulldata %>% 
+  ggplot() +
+  facet_wrap(~id_plant, ncol = 5) +
+  geom_density_ridges(aes(y = bird_sp, x = Pvisit.sp.bc), 
+                      rel_min_height = 0.01, 
+                      color = "orangered", fill = "orangered", alpha = 0.4) +
+  geom_density_ridges(aes(y = bird_sp, x = Pvisit.sp.cam), 
+                      rel_min_height = 0.01, 
+                      color = "steelblue", fill = "steelblue", alpha = 0.4) +
+  theme(axis.text.y = element_text(size = 5),
+        axis.text.x = element_text(size = 5)) +
+  labs(title = "Puntal", 
+       x = "Probability of visit",
+       y = "") +
+  coord_cartesian(xlim = c(0, 0.06))
+
+ggsave(here("analysis", "output", "Pvisit.sp.Puntal.bc.cam.pdf"), 
+       width = 9, height = 21, units = "in")
+```
+
+
+## Calculate mean PV
+
+```{r SDE-QTY-PV-merge-Puntal-7}
+fulldata <- fulldata %>% 
+  mutate(PV.combined = rowMeans(select(., Pvisit.sp.bc, Pvisit.sp.cam), na.rm = TRUE))
+
+saveRDS(fulldata, here("analysis", "output", "PV.Puntal.combined.rds"))
+```
+
+
+## Visualise combined PV
+
+```{r SDE-QTY-PV-merge-Puntal-8}
+fulldata %>% 
+  ggplot() +
+  facet_wrap(~id_plant, ncol = 5) +
+  geom_density_ridges(aes(y = reorder(bird_sp, PV.combined), x = PV.combined), 
+                      rel_min_height = 0.01, 
+                      alpha = 0.4) +
+  theme(axis.text.y = element_text(size = 5),
+        axis.text.x = element_text(size = 5)) +
+  labs(title = "Puntal", 
+       x = "Probability of visit",
+       y = "") +
+  coord_cartesian(xlim = c(0, 0.04))
+
+ggsave(here("analysis", "output", "Pvisit.sp.Puntal.combined_ridges.pdf"), 
+       width = 9, height = 21, units = "in")
+```
+
+
+```{r SDE-QTY-PV-merge-Puntal-10}
+fulldata %>% 
+  ggplot() +
+  facet_wrap(~id_plant, ncol = 5) +
+  stat_gradientinterval(aes(y = reorder(bird_sp, PV.combined), x = PV.combined), 
+                        size = 1) +
+  theme(axis.text.y = element_text(size = 5),
+        axis.text.x = element_text(size = 5)) +
+  labs(title = "Puntal", 
+       x = "Probability of visit",
+       y = "") +
+  coord_cartesian(xlim = c(0, 0.04))
+
+ggsave(here("analysis", "output", "Pvisit.sp.Puntal.combined.pdf"), 
+       width = 9, height = 21, units = "in")
+```

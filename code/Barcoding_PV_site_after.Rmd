@@ -1,0 +1,72 @@
+---
+title: "Barcoding: calculating differences between sites in bird visitation"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+
+```{r setup, include=FALSE}
+set.seed(888)
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, out.width = '100%', cache = TRUE)
+```
+
+
+```{r SDE-QTY-PV-Barcoding-1 }
+library(here)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(ggdist)
+
+source(here("code", "functions.R"))
+
+theme_set(theme_minimal())
+```
+
+## Calculate PVsite
+
+Calculate number and proportion of visits going on at each site
+
+
+```{r}
+Nvisit.ind.Mad <- readRDS(here("data", "bc.indiv.Madronas.Nvisits.post.long.rds"))
+Nvisit.ind.Puntal <- readRDS(here("data", "bc.indiv.Puntal.Nvisits.post.long.rds"))
+
+Nvisit.Mad <- Nvisit.ind.Mad %>% 
+  select(-site) %>% 
+  pivot_wider(names_from = id_plant, values_from = visits) %>% 
+  unnest() %>% 
+  mutate(visit.sum = rowSums(.)) %>% 
+  pull(visit.sum)
+
+Nvisit.Puntal <- Nvisit.ind.Puntal %>% 
+  select(-site) %>% 
+  pivot_wider(names_from = id_plant, values_from = visits) %>% 
+  unnest() %>% 
+  mutate(visit.sum = rowSums(.)) %>% 
+  pull(visit.sum)
+
+
+Nvisit.both <- data.frame(visits.Mad = Nvisit.Mad,
+                          visits.Puntal = Nvisit.Puntal) %>% 
+  mutate(visits.total = visits.Mad + visits.Puntal) %>% 
+  mutate(vis.prop.Mad = visits.Mad / visits.total,
+         vis.prop.Puntal = visits.Puntal / visits.total)
+
+summary(Nvisit.both)
+
+saveRDS(Nvisit.both, here("analysis", "output", "Nvisits.site.rds"))
+# saveRDS(Nvisit.both$vis.prop.Mad, here("analysis", "output", "Psite.Madronas.rds"))
+# saveRDS(Nvisit.both$vis.prop.Puntal, here("analysis", "output", "Psite.Puntal.rds"))
+
+```
+
+
+
+-----------------------------------------------------------------------------
+
+```{r SDE-QTY-PV-Barcoding-42}
+sessioninfo::session_info()
+```
+

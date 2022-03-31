@@ -1,0 +1,230 @@
+---
+title: "Probability of seedling emergence & survival at each microhabitat"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+
+```{r setup, include=FALSE}
+set.seed(888)
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, out.width = '100%', 
+                      cache = TRUE, message = FALSE)
+```
+
+```{r }
+library(here)
+library(readr)
+library(dplyr)
+library(ggplot2)
+suppressPackageStartupMessages(library(tidylog))
+
+source(here("code", "functions.R"))
+
+theme_set(theme_minimal())
+```
+
+
+Load data
+
+```{r}
+
+## Using mid-October census
+mhdata <- read_csv(here("data", "seedling_emergence.csv"), guess_max = 10000) %>% 
+  filter(revision_date %in% as.Date(c("2019-10-23", "2020-10-14"))) %>% 
+  filter(! (season == "2018-19" & revision_date > as.Date("2019-10-31"))) %>%  # consider only first summer census (ie. remove 2nd summer) 
+  filter(! (season == "2019-20" & revision_date == as.Date("2019-10-23"))) %>% 
+  mutate(year = ifelse(season == "2018-19", "2019", "2020")) %>% 
+  mutate(alive = as.numeric(alive))  # censored now coded as NA
+
+table(mhdata$season, mhdata$sowing_date)
+table(mhdata$season, mhdata$revision_date)
+table(mhdata$season, mhdata$germin_station)
+table(mhdata$season, mhdata$alive)
+
+mhdata %>% 
+  filter(is.na(alive)) %>%
+  group_by(mh) %>% 
+  summarise(n())
+
+# Remove censored 
+mhdata <- mhdata %>% 
+  filter(!is.na(alive))
+
+# Summary
+table(mhdata$mh, mhdata$alive, mhdata$season)
+
+```
+
+
+
+
+## Model seedling emergence and survival
+
+We model, for every sown seed, the probability of having turned into an alive seedling at the end of their first summer, across microhabitats and years (2018-19 & 2019-20).
+
+There are 5 microhabitats (MH), with 6-7 sowing points per MH, each with 16 seeds.
+
+
+### Prior Predictive Check
+
+
+```{r }
+library("brms")
+
+surv.formu <- brmsformula(alive ~ mh * year + (1 | germin_station), 
+                            family = bernoulli())
+
+get_prior(surv.formu, data = mhdata)
+
+## priors (logit scale)
+# plogis(-6.9) = 0.001   (0.1% survival)
+# plogis(-5.9) = 0.0027
+# plogis(-7.9) = 0.0004
+# plogis(-4.9) = 0.007
+# plogis(-8.9) = 0.0001
+priors <- c(
+  prior(normal(-6.9, 2), class = "Intercept"), 
+  prior(normal(0, 2), class = "b"),
+  prior(normal(0, 1), class = "sd")
+)
+
+```
+
+
+Prior predictive check:
+
+```{r eval=TRUE}
+surv.m <- brm(surv.formu,
+         data = mhdata,
+         prior = priors,
+         sample_prior = "only",
+         cores = 4,
+         iter = 2000,
+         refresh = 0)
+
+# stancode(surv.m)
+pp_check(surv.m, ndraws = 100) 
+summary(surv.m, priors = TRUE)
+plot(surv.m, ask = FALSE)
+```
+
+
+
+### Fit model
+
+
+```{r }
+surv.m <- brm(surv.formu,
+         data = mhdata, 
+         prior = priors,
+         cores = 4,
+         iter = 2000,
+         refresh = 0)
+         
+```
+
+
+Check: 
+
+```{r }
+library(DHARMa)
+
+pp_check(surv.m, ndraws = 100)
+bayestestR::check_prior(surv.m)
+
+summary(surv.m, priors = TRUE)
+
+plot(surv.m, ask = FALSE)
+
+stancode(surv.m)
+
+# coef(surv.m)
+fixef(surv.m)
+
+modelbased::estimate_expectation(surv.m)
+
+#mcmc_plot(surv.m, pars = "sampling_point")
+# launch_shinystan(surv.m)
+
+#DHARMa
+surv.check <- check_brms(surv.m, integer = TRUE)
+plot(surv.check, form = mhdata$mh)
+plot(surv.check, form = mhdata$year)
+# testCategorical(surv.check, seeds.mh$mh)
+#testCategorical(surv.check, seeds.mh.M$sampling_point)
+testDispersion(surv.check)
+# testUniformity(surv.check)
+
+saveRDS(surv.m, here("analysis", "output", "surv.mh.model.rds"))
+
+```
+
+
+
+### Predict
+
+```{r }
+
+## Full posterior distributions
+
+surv.2019 <- posterior_linpred(surv.m, 
+                                newdata = data.frame(mh = sort(unique(mhdata$mh)),
+                                                     year = "2019"),
+                               re.form = NA,
+                                ndraws = 1000) %>% 
+  as.data.frame() %>%
+  setNames(sort(unique(mhdata$mh))) %>% 
+  pivot_longer(cols = everything(), names_to = "mh", values_to = "surv.2019") %>% 
+  arrange(mh)
+
+
+surv.2020 <- posterior_linpred(surv.m, 
+                                newdata = data.frame(mh = sort(unique(mhdata$mh)),
+                                                     year = "2020"),
+                               re.form = NA,
+                                ndraws = 1000) %>% 
+  as.data.frame() %>%
+  setNames(sort(unique(mhdata$mh))) %>% 
+  pivot_longer(cols = everything(), names_to = "mh", values_to = "surv.2020") %>% 
+  arrange(mh)
+
+surv.post <- bind_cols(surv.2019, select(surv.2020, -mh)) %>% 
+  mutate(surv.2019 = plogis(surv.2019),
+         surv.2020 = plogis(surv.2020)) %>% 
+  mutate(surv.avg = (surv.2019 + surv.2020) / 2)
+
+saveRDS(surv.post, here("analysis", "output", "surv.mh.post.rds"))
+
+```
+
+
+```{r}
+surv.post %>% 
+  group_by(mh) %>% 
+  summarise(median(surv.2019), median(surv.2020), median(surv.avg))
+
+ggplot(surv.post) +
+  geom_density(aes(surv.avg), fill = "lightgrey") +
+  facet_wrap(~mh, ncol = 1, scales = "free_y") +
+  theme(axis.text.y = element_blank()) +
+  labs(title = "Average of both years")
+
+ggplot(surv.post) +
+  geom_density(aes(surv.2019), fill = "lightgrey") +
+  facet_wrap(~mh, ncol = 1, scales = "free_y") +
+  theme(axis.text.y = element_blank()) +
+  labs(title = "2019")
+
+ggplot(surv.post) +
+  geom_density(aes(surv.2020), fill = "lightgrey") +
+  facet_wrap(~mh, ncol = 1, scales = "free_y") +
+  theme(axis.text.y = element_blank()) +
+  labs(title = "2020")
+```
+
+
+```{r}
+sessioninfo::session_info()
+```
+

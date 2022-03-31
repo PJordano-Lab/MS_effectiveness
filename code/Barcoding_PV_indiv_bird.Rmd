@@ -1,0 +1,605 @@
+---
+title: "Barcoding: calculating probability of visit for each bird species and individual plant"
+date: "`r Sys.Date()`"
+output: github_document
+params:
+  site: Madronas
+---
+
+
+```{r setup, include=FALSE}
+set.seed(888)
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, out.width = '100%', cache = TRUE, message = FALSE)
+
+psite = params$site
+```
+
+
+
+# SITE: `r psite`
+
+
+```{r Barcoding-PV-indiv-bird-1 }
+library(here)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(brms)
+library(DHARMa)
+library(ggdist)
+
+source(here("code", "functions.R"))
+
+theme_set(theme_minimal())
+```
+
+
+Load barcoding data:
+
+```{r Barcoding-PV-indiv-bird-2 }
+bcdata <- readr::read_csv(here("data", "bc_indiv_lentisc.csv")) %>% 
+  filter(site == psite)
+bcdata
+glimpse(bcdata)
+```
+
+
+```{r Barcoding-PV-indiv-bird-3, results = "asis"}
+summarytools::dfSummary(bcdata, plain.ascii = FALSE, style = "grid", valid.col = FALSE)
+```
+
+
+## Calculating the QUANTITY component of Seed Dispersal Effectiveness (SDE)
+
+### PVsite
+
+Droppings per site:
+
+```{r Barcoding-PV-indiv-bird-4 }
+bcdata %>% 
+  group_by(site) %>% 
+  summarise(ndroppings = n())
+```
+
+There are many more droppings in El Puntal. But note sampling effort has not been equal (4 individuals in El Puntal had 2 seed traps instead of 1).
+
+
+Get number of visits per plant
+
+```{r Barcoding-PV-indiv-bird-5 }
+bcdata.visits <- bcdata %>% 
+  group_by(site, id_plant, trap_area) %>% 
+  summarise(visits.id = n()) %>% 
+  mutate(visits.total = sum(.$visits.id),
+         visits.prop = visits.id/visits.total)
+
+bcdata.visits$row <- 1:nrow(bcdata.visits)
+
+```
+
+
+-----------------------------------------------------------------------------
+
+### PV indiv
+
+Here we estimate the number of bird visits to each individual plant (per m2) over the whole fruiting season. 
+
+We equate a dropping with a visit.
+
+
+#### EDA
+
+
+Droppings per individual lentisc:
+
+
+```{r Barcoding-PV-indiv-bird-6, fig.height=5}
+bcdata %>% 
+  filter(site == psite) %>% 
+  group_by(id_plant) %>% 
+  summarise(ndroppings = n()) %>% 
+  arrange(desc(ndroppings)) %>% 
+  ggplot() +
+  geom_col(aes(reorder(id_plant, ndroppings), ndroppings)) +
+  coord_flip() +
+  labs(x = "Individual", y = "Number of droppings", 
+       title = "Number of bird droppings over the 2019-20 season",
+       subtitle = psite)
+```
+
+
+Note 4 individuals in El Puntal have 2 seed traps beneath, instead of one, hence double sampling effort: 
+
+```{r Barcoding-PV-indiv-bird-8, eval=isTRUE(psite == "Puntal") }
+bcdata %>% 
+  filter(trap_area == 0.44) %>% 
+  summarise(unique(id_plant))
+```
+
+That's why these individuals have so many droppings collected beneath.
+
+
+Number of droppings collected by Date:
+
+```{r Barcoding-PV-indiv-bird-9 }
+bcdata %>% 
+  group_by(site, date_collection) %>% 
+  summarise(ndroppings = n()) %>% 
+  ggplot() +
+  facet_wrap(~site, ncol = 1) + 
+  geom_line(aes(date_collection, ndroppings))
+```
+
+
+
+
+
+#### MODEL
+
+Using Poisson to model Nvisits per plant per m2 of trap_area (canopy vertical projection). One model for each of both populations: Madroñas & Puntal.
+
+
+##### `r psite`
+
+Formula & priors:
+
+```{r Barcoding-PV-indiv-bird-12 }
+
+# rate(trap_area) = offset(log(trap_area)), see ?bf
+Nvisit.formu <- brmsformula(visits.id | rate(trap_area) ~  
+                              (1 | id_plant), 
+                            family = poisson())
+
+get_prior(Nvisit.formu, data = bcdata.visits)
+
+## priors (log scale)
+# exp(4) = 54 visits/m2
+# exp(3) = 20 visits/m2
+# exp(5) = 148 visits/m2
+# plot(density(rlnorm(1000, 4, 1)))
+priors <- c(
+  set_prior("normal(4, 1)", class = "Intercept"), 
+  set_prior("normal(0, 1)", class = "sd")
+)
+```
+
+
+Prior predictive check:
+
+```{r nvisit-ppc}
+Nvisit.m <- brm(Nvisit.formu,
+         data = bcdata.visits,
+         prior = priors,
+         sample_prior = "only",
+         cores = 4,
+         iter = 2000,
+         refresh = 0)
+
+# stancode(Nvisit.m)
+pp_check(Nvisit.m, nsamples = 100) + xlim(5, 100)
+summary(Nvisit.m, priors = TRUE)
+plot(Nvisit.m)
+```
+
+
+
+Fit model:
+
+
+```{r nvisit-fit}
+Nvisit.m <- brm(Nvisit.formu,
+         data = bcdata.visits,
+         prior = priors,
+         # sample_prior = "only",
+         cores = 4,
+         iter = 4000,
+         refresh = 0)
+```
+
+
+Check: 
+
+```{r nvisit-check}
+
+pp_check(Nvisit.m, nsamples = 100)
+bayesplot::ppc_rootogram(y = bcdata.visits$visits.id, 
+                         yrep = posterior_predict(Nvisit.m, nsamples = 1000))
+# pp_check(Pvisit.m, nsamples = 100, type = "error_scatter_avg")
+bayestestR::check_prior(Nvisit.m)
+
+summary(Nvisit.m, priors = TRUE)
+
+plot(Nvisit.m)
+
+stancode(Nvisit.m)
+
+# coef(Nvisit.m)
+fixef(Nvisit.m)
+lapply(ranef(Nvisit.m), round, digits = 3)
+
+#mcmc_plot(Nvisit.m, pars = "id_plant")
+# launch_shinystan(Pvisit.m)
+
+#DHARMa
+Nvisit.check <- check_brms(Nvisit.m, integer = TRUE)
+# plot(Nvisit.check, form = bcdata.visits$id_plant)
+testDispersion(Nvisit.check)
+
+
+saveRDS(Nvisit.m, here("analysis", "output", paste0("bc.indiv.", psite, ".Nvisit.model.rds")))
+
+```
+
+
+
+### Predict
+
+Loading plant canopy area
+
+```{r}
+plant.area <- read.csv(here("data", "dron_areas.csv"), sep = ";") %>% 
+  filter(site == psite) %>% 
+  rename(id_plant = plant_id) %>% 
+  filter(id_plant != 377)
+
+bcdata.visits <- left_join(bcdata.visits, plant.area)
+```
+
+
+
+```{r Barcoding-PV-indiv-bird-14 }
+
+## Full posterior distributions
+bc.visits.post <- posterior_predict(Nvisit.m, 
+                                    newdata = data.frame(
+                                      # site = bcdata.visits.M$site,
+                                    id_plant = bcdata.visits$id_plant,
+                                    # visits per m2 or per indiv (ie using real indiv canopy area)
+                                    # trap_area = 1,  
+                                    trap_area = bcdata.visits$area_new),
+                                    nsamples = 1000) %>% 
+  as.data.frame() %>%
+  setNames(unique(bcdata.visits$id_plant)) 
+
+
+bc.visits.post.long <- bc.visits.post %>% 
+  tidyr::pivot_longer(cols = everything(), names_to = "id_plant", values_to = "visits") %>% 
+  mutate(id_plant = as.numeric(id_plant)) %>% 
+  right_join(select(bcdata.visits, site, id_plant), by = "id_plant") %>% 
+  relocate(site, .before = id_plant) %>% 
+  arrange(site, id_plant) %>% 
+  mutate(id_plant = as.character(id_plant))
+
+saveRDS(bc.visits.post.long, here("analysis", "output", 
+                                     paste0("bc.indiv.", psite, ".Nvisits.post.long.rds")))
+
+```
+
+
+Sum total number of visits for each iteration to calculate prop of visit to each individual:
+
+```{r Barcoding-PV-indiv-bird-16 }
+bc.Pvisit.post <- Nvisit2Pvisit(bc.visits.post, tidy = TRUE) %>% 
+  left_join(select(bcdata.visits, site, id_plant), by = "id_plant") %>% 
+  relocate(site, .before = id_plant) %>% 
+  arrange(site, id_plant)
+
+bc.Pvisit.post %>% 
+  group_by(id_plant) %>% 
+  summarise(mean(Pvisit)) %>% 
+  arrange(desc(`mean(Pvisit)`)) %>% 
+  kable(digits = 2)
+
+saveRDS(bc.Pvisit.post, here("analysis", "output", 
+                                paste0("bc.indiv.", psite, ".Pvisit.post.long.rds")))
+
+```
+
+
+
+
+Plot:
+
+```{r Barcoding-PV-indiv-bird-17 }
+
+bc.visits.post.long %>% 
+  group_by(id_plant) %>% 
+  ggplot() +
+  aes(x = reorder(id_plant, visits), y = visits) +
+  stat_gradientinterval() +
+  coord_flip() +
+  labs(x = "Plant", y = "Visits")
+
+ggsave(here("analysis", "output", paste0("bc.indiv.", psite, ".visits.post.pdf")), 
+       device = "pdf", width = 9, height = 11, units = "in")
+```
+
+
+
+------------------------------------------------------------------
+
+### 2. Pbird: Probability of visit by each bird species at each plant
+
+#### 2.1 Prepare data
+
+Get number of visits per bird species per plant. There are a few NA: we remove them as it could be any species (if we would count them for the total number of visits per individual we could be biasing down the frequency of the other species).
+
+
+
+```{r Barcoding-PV-indiv-bird-18}
+bcdata.visits.sp <- bcdata %>% 
+  filter(site == psite) %>% 
+  filter(!is.na(bird_sp)) %>% 
+  group_by(site, id_plant, trap_area, bird_sp) %>% 
+  summarise(visits.bird.plant = n()) %>% 
+  ungroup()
+```
+
+
+Only in Puntal: Add interactions that were observed in videos but not in barcoding (with 0 value)
+
+```{r Barcoding-PV-indiv-bird-19, eval=isTRUE(psite == "Puntal"), echo=isTRUE(psite == "Puntal")}
+camdata <- readr::read_csv(here("data", "cam_indiv_lentisc.csv"))
+
+cam.only <- camdata %>% 
+  select(id_plant, bird_sp) %>% 
+  filter(!is.na(bird_sp), bird_sp != "unknown") %>% 
+  distinct() %>% 
+  anti_join(select(bcdata.visits.sp, id_plant, bird_sp)) %>% 
+  mutate(site = "Puntal", 
+         visits.bird.plant = 0) %>% 
+  left_join(distinct(select(bcdata.visits.sp, id_plant, trap_area)), by = "id_plant")
+
+kable(cam.only)
+
+bcdata.visits.sp <- bcdata.visits.sp %>% 
+  full_join(cam.only)
+```
+
+
+Add other unobserved interactions (value = 0):
+
+```{r }
+all.int <- expand.grid(id_plant = sort(unique(bcdata.visits.sp$id_plant)), 
+                       bird_sp = sort(unique(bcdata.visits.sp$bird_sp)), 
+                       stringsAsFactors = FALSE)
+
+unobs <- anti_join(all.int, select(bcdata.visits.sp, id_plant, bird_sp)) %>% 
+    mutate(site = "unobs", 
+           visits.bird.plant = 0) %>% 
+  relocate(site) %>% 
+  left_join(distinct(select(bcdata.visits.sp, id_plant, trap_area)), by = "id_plant") %>% 
+  relocate(trap_area, .before = bird_sp)
+
+bcdata.visits.sp <- full_join(bcdata.visits.sp, unobs)
+```
+
+
+
+
+Calculate total number of **identified** visits per plant: 
+
+```{r Barcoding-PV-indiv-bird-20 }
+
+bcdata.visits.id <- bcdata.visits.sp %>% 
+  group_by(id_plant) %>% 
+  summarise(visits.plant.total = sum(visits.bird.plant))
+
+bcdata.visits.sp <- bcdata.visits.sp %>% 
+  left_join(bcdata.visits.id, by = "id_plant") %>% 
+  mutate(visits.bird.plant.prop = visits.bird.plant/visits.plant.total) %>% 
+  ungroup() %>% 
+  arrange(id_plant, bird_sp)
+
+bcdata.visits.sp$row <- 1:nrow(bcdata.visits.sp)
+
+```
+
+
+There are some bird species rather rare: 
+
+```{r Barcoding-PV-indiv-bird-21 }
+bcdata.visits.sp %>% 
+  group_by(bird_sp) %>% 
+  summarise(suma = sum(visits.bird.plant)) %>% 
+  arrange(desc(suma)) %>% 
+  as.data.frame()
+```
+
+
+
+
+#### 2.2 Model
+
+
+
+```{r pbird-formu}
+
+Pbird.formu <- bf(visits.bird.plant | trials(visits.plant.total) ~
+                    (1 | bird_sp) + (1 | id_plant) + 
+                    (1 | bird_sp:id_plant),
+                  family = binomial())
+
+get_prior(Pbird.formu, data = bcdata.visits.sp)
+
+# priors (logit scale)
+# plogis(0) = 0.5
+# plogis(-1) = 0.27
+# plogis(-2) = 0.12   
+# plogis(-3) = 0.047
+# plogis(-4) = 0.018
+# plogis(-6) = 0.0025
+# plogis(-7) = 0.0009
+# plogis(-8) = 0.00033
+
+priors <- c(
+  set_prior("normal(-6.5, 1)", class = "Intercept"), 
+  set_prior("normal(0, 3)", class = "sd")
+)
+
+```
+
+
+
+Prior predictive check:
+
+```{r pbird-ppc}
+
+Pbird.m <- brm(Pbird.formu,
+         data = bcdata.visits.sp,
+         prior = priors,
+         sample_prior = "only",
+         cores = 4,
+         iter = 2000,
+         refresh = 0)
+
+# stancode(Nvisit.m)
+pp_check(Pbird.m, nsamples = 100)
+pp_check(Pbird.m, nsamples = 100) + coord_cartesian(xlim = c(0, 5))
+summary(Pbird.m, priors = TRUE)
+plot(Pbird.m)
+
+```
+
+
+Fit model:
+
+```{r pbird-fit}
+Pbird.m <- brm(Pbird.formu,
+         data = bcdata.visits.sp,
+         prior = priors,
+         cores = 4,
+         iter = 4000,
+         refresh = 0)
+```
+
+
+Check:
+
+```{r Pbird-check}
+
+pp_check(Pbird.m, nsamples = 100)
+pp_check(Pbird.m, nsamples = 100) + coord_cartesian(xlim = c(0, 5), ylim = c(0, 1))
+pp_check(Pbird.m, nsamples = 100, type = "bars") + coord_cartesian(xlim = c(0, 5))
+# pp_check(Pvisit.m, nsamples = 100, type = "error_scatter_avg")
+suppressWarnings(bayestestR::check_prior(Pbird.m))
+
+summary(Pbird.m, priors = TRUE)
+
+plot(Pbird.m)
+
+stancode(Pbird.m)
+
+lapply(coef(Pbird.m), head)
+fixef(Pbird.m)
+# ranef(Pbird.m)
+
+# mcmc_plot(Pbird.m, pars = "id_plant")
+# launch_shinystan(Pvisit.m)
+
+#DHARMa
+Pbird.check <- check_brms(Pbird.m, integer = TRUE)
+plot(Pbird.check, form = bcdata.visits.sp$bird_sp)
+plot(Pbird.check, form = bcdata.visits.sp$id_plant)
+# testDispersion fails with truncated, use tryCatch below to avoid stopping error
+tryCatch(testDispersion(Pbird.check), 
+         error = function(e) {message("Not available for truncated responses")})
+# testUniformity(Pbird.check)
+
+saveRDS(Pbird.m, here("analysis", "output", paste0("bc.Pbird.", psite, ".model.rds")))
+```
+
+
+
+Predict:
+
+```{r Barcoding-PV-indiv-bird-24 }
+## Full posterior distributions
+
+# Keep only observed interactions (either by barcoding or videos)
+only.obs <- filter(bcdata.visits.sp, site != "unobs")
+
+
+bc.Pbird.post <- posterior_linpred(Pbird.m, 
+                                   newdata = only.obs,
+                                   nsamples = 1000) %>% 
+  as.data.frame() %>%
+  setNames(paste(only.obs$id_plant, only.obs$bird_sp, sep = "_")) %>% 
+  tidyr::pivot_longer(cols = everything(), names_to = "plant.bird", values_to = "Pbird.logit") %>% 
+  tidyr::separate(plant.bird, c("id_plant", "bird_sp"), sep = "_") %>% 
+  mutate(id_plant = as.numeric(id_plant)) %>% 
+  left_join(distinct(select(only.obs, site, id_plant)), by = "id_plant") %>% 
+  relocate(site, .before = id_plant) %>% 
+  arrange(site, id_plant, bird_sp) %>% 
+  mutate(id_plant = as.character(id_plant)) %>% 
+  mutate(Pbird = plogis(Pbird.logit))
+
+saveRDS(bc.Pbird.post, here("analysis", "output", paste0("bc.Pbird.", psite, ".post.rds")))
+
+bc.Pbird.post %>% 
+  group_by(id_plant, bird_sp) %>% 
+  summarise(mean.Pbird = mean(Pbird)) %>% 
+  arrange(id_plant, desc(mean.Pbird)) %>% 
+  kable(digits = 2)
+
+```
+
+
+
+
+# Plots
+
+
+```{r Barcoding-PV-indiv-bird-25, fig.height=12}
+
+plot_Pbird_plant(pop = psite, df = bc.Pbird.post, bc.cam = "bc")
+
+plot_Pbird_bird(pop = psite, df = bc.Pbird.post, bc.cam = "bc")
+
+```
+
+
+
+### Calculate Pvisit for each bird at each plant
+
+The number of visits from each bird species to each individual plant can be calculated as the product of the probability that each plant is visited by any bird X Probability that a visit is by a particular species (i.e. multiply posterior of model 1 and model 2)
+
+```{r Barcoding-PV-indiv-bird-27 }
+# Nvisit <- readRDS(here("analysis", "output", paste0("bc.indiv.", psite, ".Nvisits.post.long.rds")))
+# Pvisit <- readRDS(here("analysis", "output", paste0("bc.indiv.", psite, ".Pvisit.post.long.rds")))
+# Pbird <- readRDS(here("analysis", "output", paste0("bc.Pbird.", psite, ".post.rds")))
+Pvisit <- bc.Pvisit.post
+Pbird <- bc.Pbird.post
+```
+
+
+```{r Barcoding-PV-indiv-bird-28 }
+Pbird.list <- split(select(Pbird, -Pbird.logit), ~id_plant)
+
+Pvisit.sp.list <- lapply(Pbird.list, mutiply_PVindiv_Pbird, Pvis = Pvisit)
+
+Pvisit.sp <- bind_rows(Pvisit.sp.list) %>% 
+  rename(PVindiv = Pv) %>% 
+  relocate(PVindiv, .before = Pbird) %>% 
+  ungroup()
+
+saveRDS(Pvisit.sp, here("analysis", "output", paste0("bc.Pvisit.sp.", psite, ".rds")))
+```
+
+
+
+```{r Barcoding-PV-indiv-bird-29, fig.height=15}
+plot_PV_plant(pop = psite, df = filter(Pvisit.sp, site == psite), 
+              bc.cam = "bc", all = FALSE)
+```
+
+
+
+
+------------------------------------------------------------------------------
+
+```{r Barcoding-PV-indiv-bird-33 }
+sessioninfo::session_info()
+```
+

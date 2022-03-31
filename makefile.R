@@ -1,5 +1,66 @@
 # Master script for the project ################################
+
 library(rmarkdown)
+options(brms.backend = "cmdstanr")
+
+
+## Barcoding: PV indiv & Pbird -> Pvisit.sp
+
+# Madroñas
+render("code/Barcoding_PV_indiv_bird.Rmd", 
+       output_file = "Barcoding_PV_indiv_bird_Madronas.md",
+       params = list(site = "Madronas"))
+
+# Puntal 
+render("code/Barcoding_PV_indiv_bird.Rmd", 
+       output_file = "Barcoding_PV_indiv_bird_Puntal.md",
+       params = list(site = "Puntal"))
+
+## Barcoding: PV site
+render("code/Barcoding_PV_site_after.Rmd")
+
+
+## Videos (only Puntal)
+render("code/Videos_PV_indiv_bird.Rmd")
+
+
+## Puntal: merge barcoding + Videos
+render("code/PV_merge_Puntal.Rmd")
+
+
+#### Pfeed
+render("code/Prob_consumption_visit.Rmd")
+
+
+#### Nfruits/visit
+render("code/Number_fruits_visit.Rmd")
+
+
+#### Prob. escape from seed predators
+render("code/Prob_escape_seed_predators.Rmd")
+
+
+## SDE QTY: multiply everything
+render("code/SDE_QTY.Rmd")
+
+
+
+##### SDE QUALITY #####
+
+## Probability of dispersal to each Microhabitat by each bird species
+render("code/Prob_MH_use.Rmd")
+
+## Probability of emergence and surviving 1st summer
+render("code/mh_emergence.Rmd")
+
+## Probability of escaping seed predation
+render("code/mh_seed_predation.Rmd")
+
+
+## SDE-QLTY total
+render("code/SDE_QLTY.Rmd")
+
+
 
 
 ## DATA COMBINATION ############################################

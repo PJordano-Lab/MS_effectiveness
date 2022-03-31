@@ -1,0 +1,183 @@
+---
+title: "Probability of consumption | visit"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+
+```{r setup, include=FALSE}
+set.seed(888)
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, out.width = '100%', 
+                      cache = TRUE, message = FALSE)
+```
+
+```{r Prob-consumption-visit-1 }
+library(here)
+library(dplyr)
+library(ggplot2)
+library(brms)
+library(DHARMa)
+
+source(here("code", "functions.R"))
+
+theme_set(theme_minimal())
+```
+
+
+Load data
+
+```{r Prob-consumption-visit-2}
+camdata <- readr::read_csv(here("data", "cam_indiv_lentisc.csv")) %>% 
+  filter(!is.na(bird_sp), bird_sp != "unknown")
+```
+
+Identified consumption per species:
+
+```{r Prob-consumption-visit-3, fig.height=10}
+camdata %>% 
+  mutate(feeding = factor(feeding, levels = c("yes", "likely", "no", "unknown"))) %>% 
+  ggplot() +
+  facet_wrap(~bird_sp, scales = "free_y", ncol = 4) + 
+  geom_bar(aes(feeding)) +
+  theme(strip.text = element_text(size = 6),
+        axis.text.x = element_text(angle = 45, size = 5))
+```
+
+
+
+
+
+## Model
+
+using likely as yes
+
+```{r Prob-consumption-visit-9}
+cdata <- camdata %>% 
+  mutate(feeding = ifelse(feeding == "likely", "yes", feeding)) %>% 
+  filter(feeding == "yes" | feeding == "no")
+```
+
+```{r Prob-consumption-visit-10, fig.height=10}
+cdata %>% 
+  ggplot() +
+  facet_wrap(~bird_sp, scales = "free_y", ncol = 4) + 
+  geom_bar(aes(feeding)) +
+  theme(strip.text = element_text(size = 4))
+```
+
+Model. Prior predictive check:
+
+```{r pfeed-formu}
+cons.formu <- brmsformula(feeding ~ (1 | bird_sp),
+                         family = bernoulli())
+
+get_prior(cons.formu, data = cdata)
+
+# priors (logit scale)
+
+priors <- c(
+  set_prior("normal(0, 2)", class = "Intercept"), 
+  set_prior("normal(0, 2)", class = "sd")
+)
+```
+
+```{r pfeed-ppc}
+cons.m <- brm(cons.formu,
+         data = cdata,
+         prior = priors,
+         sample_prior = "only",
+         cores = 4,
+         iter = 2000,
+         refresh = 0)
+
+# stancode(cons.m)
+pp_check(cons.m, nsamples = 100)
+summary(cons.m, priors = TRUE)
+plot(cons.m)
+
+```
+
+Fit model:
+
+```{r Prob-consumption-visit-11}
+
+cons.m <- brm(cons.formu,
+         data = cdata,
+         prior = priors,
+         # sample_prior = "only",
+         cores = 4,
+         iter = 4000,
+         refresh = 0)
+```
+
+Check:
+
+```{r}
+pp_check(cons.m, nsamples = 100)
+
+bayestestR::check_prior(cons.m)
+
+summary(cons.m, priors = TRUE)
+
+plot(cons.m)
+
+stancode(cons.m)
+
+
+coef(cons.m)
+# fixef(cons.m)
+# ranef(cons.m)
+
+# mcmc_plot(cons.m, pars = "id_plant")
+# launch_shinystan(cons.m)
+
+#DHARMa
+cons.check <- check_brms(cons.m, integer = TRUE)
+plot(cons.check, form = cdata$bird_sp)
+
+saveRDS(cons.m, here("analysis", "output", "feed_yes.likely.no_model.rds"))
+
+```
+
+
+### Predicted Pfeed:
+
+```{r Prob-consumption-visit-12}
+
+consumo.post <- data.frame(bird_sp = sort(unique(cdata$bird_sp))) %>% 
+  bind_cols(as.data.frame(predict(cons.m, newdata = .))) %>% 
+  arrange(desc(Estimate)) 
+
+
+kable(select(consumo.post, bird_sp, Estimate), digits = 3)
+
+```
+
+
+```{r Prob-consumption-visit-15}
+## Full posterior distributions
+newdat <- data.frame(bird_sp = sort(c(unique(cdata$bird_sp), 
+                                    "Columba palumbus", # not observed 
+                                    "Turdus viscivorus"))) #not observed
+Pfeed.post <- posterior_linpred(cons.m, 
+                                newdata = newdat,
+                                nsamples = 1000,
+                                allow_new_levels = TRUE) %>% 
+  as.data.frame() %>%
+  setNames(newdat$bird_sp) %>% 
+  tidyr::pivot_longer(cols = everything(), names_to = "bird_sp", values_to = "Pfeed.logit") %>% 
+  mutate(Pfeed = plogis(Pfeed.logit))
+
+Pfeed.post %>% 
+  group_by(bird_sp) %>% 
+  summarise(mean(Pfeed), sd(Pfeed)) %>% 
+  arrange(desc(`mean(Pfeed)`)) %>% 
+  kable(digits = 3)
+
+saveRDS(Pfeed.post, here("analysis", "output", "Pfeed.post.rds"))
+```
+
+
+
+

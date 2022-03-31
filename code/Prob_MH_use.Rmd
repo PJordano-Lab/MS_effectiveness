@@ -1,0 +1,536 @@
+---
+title: "SDE QLTY: Probability of microhabitat use"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+
+```{r setup, include=FALSE}
+set.seed(888)
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, out.width = '100%', 
+                      cache = TRUE, message = FALSE)
+```
+
+```{r }
+library(here)
+library(readr)
+library(dplyr)
+library(ggplot2)
+suppressPackageStartupMessages(library(tidylog))
+
+source(here("code", "functions.R"))
+
+theme_set(theme_minimal())
+```
+
+
+Load data
+
+```{r}
+mhdata <- read_csv(here("data", "mh_combined_barcoding.csv"), guess_max = 10000) %>% 
+    rename(sampling_point = id_plant,
+         sample_area_m2 = indiv_samp_eff) %>% 
+  filter(sample_area_m2 != "out_transect") %>% 
+  mutate(sample_area_m2 = as.numeric(sample_area_m2))
+
+```
+
+
+Keep only droppings w/ Pistacia seeds
+
+```{r}
+mhdata.pis <- filter(mhdata, seed_sp1 == "pistacia") 
+glimpse(mhdata.pis)
+```
+
+```{r}
+summarytools::dfSummary(mhdata.pis, plain.ascii = FALSE, style = "grid", valid.col = FALSE)
+```
+
+
+There are 5 MH (PL, FR, NF, PP, OA). PL has 40 sampling points, FR, NF and PP have 15 sampling points each, and OA there are 17 transects of different lengths (made on different days).
+
+Add two OA transects to `mhdata.pis` which didn't have any PL seed:
+
+```{r}
+oa.mis <- unique(mhdata$sampling_point)[! unique(mhdata$sampling_point) %in% unique(mhdata.pis$sampling_point)]
+
+oa.areas <- unique(mhdata$sample_area_m2[mhdata$sampling_point %in% oa.mis])
+
+mhdata.pis <- mhdata.pis %>% 
+  add_row(sampling_point = oa.mis, mh = "OA", sample_area_m2 = oa.areas, 
+          seed_sp1 = "pistacia", seed_n1 = 0)
+
+```
+
+
+Comparing full dataset w/ Pistacia only:
+
+```{r}
+
+table(mhdata$bird_sp, mhdata$mh)
+table(mhdata.pis$bird_sp, mhdata.pis$mh)
+
+round(table(mhdata$bird_sp, mhdata$mh)/nrow(mhdata), digits = 2)
+round(table(mhdata.pis$bird_sp, mhdata.pis$mh)/nrow(mhdata.pis), digits = 2)
+
+sum(is.na(mhdata$bird_sp))
+sum(is.na(mhdata.pis$bird_sp))
+
+```
+
+Remove bird species that were not observed consuming fruits (*Alectoris rufa*):
+
+```{r}
+mhdata.pis <- mhdata.pis %>% 
+  filter(bird_sp != "Alectoris rufa" | is.na(bird_sp))
+```
+
+
+Total number of PL seeds collected (not all assigned to specific bird):
+
+```{r}
+sum(mhdata.pis$seed_n1)
+```
+
+
+Seed rain per microhabitat (note sampling area has not been homogeneous across MH):
+
+```{r}
+mhdata.pis %>% 
+  group_by(mh) %>% 
+  summarise(nseed = sum(seed_n1)) %>% 
+  kable()
+```
+
+
+
+
+Seed rain per sampling point and bird:
+
+```{r}
+seeds.mh <- mhdata.pis %>% 
+  group_by(mh, sampling_point, sample_area_m2) %>% 
+  summarise(nseed = sum(seed_n1)) %>% 
+  ungroup() %>% 
+  mutate(nseed.m2 = nseed / sample_area_m2)
+
+summary(seeds.mh)
+table(seeds.mh$mh)
+
+seeds.mh.bird <- mhdata.pis %>% 
+  group_by(mh, sampling_point, sample_area_m2, bird_sp) %>% 
+  summarise(nseed = sum(seed_n1))
+
+summary(seeds.mh.bird)
+```
+
+
+
+## MODEL NSEED PER MH
+
+
+First we model the total seed rain per MH. In a second model below we assign bird species.
+This is mainly because bird species has not been identified for all seeds (otherwise we could feed count model to seeds dispersed per MH and bird species).
+
+
+### Prior Predictive Check
+
+
+```{r }
+
+library(brms)
+
+Nseed.formu <- brmsformula(nseed | rate(sample_area_m2) ~ mh, 
+                            family = negbinomial())
+
+get_prior(Nseed.formu, data = seeds.mh)
+
+## priors (log scale)
+# exp(4) = 54 seeds/m2
+# exp(3) = 20 seeds/m2
+# exp(5) = 148 seeds/m2
+# plot(density(rlnorm(1000, 3, 1)))
+priors <- c(
+  set_prior("normal(3, 2)", class = "Intercept"), 
+  set_prior("normal(0, 2)", class = "b")
+)
+```
+
+
+Prior predictive check:
+
+```{r eval=FALSE}
+Nseed.m <- brm(Nseed.formu,
+         data = seeds.mh,
+         prior = priors,
+         sample_prior = "only",
+         cores = 4,
+         iter = 2000,
+         refresh = 0)
+
+# stancode(Nseed.m)
+pp_check(Nseed.m, ndraws = 100) 
+summary(Nseed.m, priors = TRUE)
+plot(Nseed.m)
+```
+
+
+
+### Fit model
+
+
+```{r }
+Nseed.m <- brm(Nseed.formu,
+         data = seeds.mh,
+         prior = priors,
+         # sample_prior = "only",
+         cores = 4,
+         iter = 4000,
+         refresh = 0)
+```
+
+
+Check: 
+
+```{r }
+library(DHARMa)
+
+pp_check(Nseed.m, ndraws = 100)
+bayesplot::ppc_rootogram(y = seeds.mh$nseed, 
+                         yrep = posterior_predict(Nseed.m, ndraws = 1000))
+# pp_check(Pvisit.m, ndraws = 100, type = "error_scatter_avg")
+bayestestR::check_prior(Nseed.m)
+
+summary(Nseed.m, priors = TRUE)
+
+plot(Nseed.m, ask = FALSE)
+
+stancode(Nseed.m)
+
+# coef(Nseed.m)
+fixef(Nseed.m)
+
+modelbased::estimate_means(Nseed.m)
+
+#mcmc_plot(Nseed.m, pars = "sampling_point")
+# launch_shinystan(Nseed.m)
+
+#DHARMa
+Nseed.check <- check_brms(Nseed.m, integer = TRUE)
+plot(Nseed.check, form = seeds.mh$mh)
+plot(Nseed.check, form = seeds.mh$sampling_point)
+testDispersion(Nseed.check)
+
+saveRDS(Nseed.m, here("analysis", "output", "nseed.mh.model.rds"))
+
+```
+
+
+
+### Predict
+
+```{r }
+
+## Full posterior distributions
+# Mean number of seeds per m2 per MH
+Nseed.post <- posterior_predict(Nseed.m, 
+                                newdata = data.frame(
+                                  mh = unique(seeds.mh$mh),
+                                  # sampling_point = seeds.mh$sampling_point,
+                                  sample_area_m2 = 1   # seeds per m2
+                                  ),
+                                re_formula = NA,  # do not include site random effects, only MH
+                                ndraws = 1000) %>% 
+  as.data.frame() %>%
+  setNames(unique(seeds.mh$mh)) 
+
+
+Nseed.post.long <- Nseed.post %>% 
+  tidyr::pivot_longer(cols = everything(), names_to = "mh", values_to = "seeds.m2") %>%
+  arrange(mh)
+
+saveRDS(Nseed.post.long, here("analysis", "output", "Nseed.mh.post.rds"))
+
+```
+
+
+Sum total number of seeds for each iteration to calculate probability of a single seed being dispersed to each MH:
+
+```{r }
+Pseed.post <- Nvisit2Pvisit(Nseed.post, tidy = FALSE) %>% 
+  as.data.frame() %>% 
+  tidyr::pivot_longer(cols = everything(), names_to = "mh", values_to = "Pseed.mh") %>% 
+  arrange(mh)
+
+Pseed.post %>% group_by(mh) %>% summarise(mean(Pseed.mh))
+
+saveRDS(Pseed.post, here("analysis", "output", "Pseed.mh.post.rds"))
+
+```
+
+
+
+
+
+------------------------------------------------------------------
+
+### 2. Pbird: Probability that each bird species deposits seeds in different microhabitats
+
+#### 2.1 Prepare data
+
+Get number of seeds dispersed by each bird species to each microhabitat sampling point. There are quite a few NA (`r sum(seeds.mh.bird$nseed[is.na(seeds.mh.bird$bird_sp)])` out of `r sum(seeds.mh.bird$nseed)`). We remove them as it could be any species, including already identified species, so if we would count the unidentified seeds for the sampling_point total we could be biasing down the frequency of the other species.
+
+
+
+```{r }
+seeds.mh.sp <- seeds.mh.bird %>% 
+  filter(!is.na(bird_sp))
+```
+
+
+Add other unobserved combinations of deposition by bird species on sampling points (assigning nseed = 0):
+
+```{r }
+## load bird species observed consuming
+bird.consum <- readRDS(here("analysis", "output", "SDE_QTY_Nfruits.rds")) %>% 
+  distinct(bird_sp) %>% 
+  pull()
+
+bird.consum
+
+all.int <- expand.grid(sampling_point = sort(unique(seeds.mh$sampling_point)), 
+                       bird_sp = bird.consum, 
+                       stringsAsFactors = FALSE)
+
+unobs <- anti_join(all.int, dplyr::select(seeds.mh.sp, sampling_point, bird_sp)) %>% 
+    mutate(nseed = 0) %>% 
+  left_join(distinct(dplyr::select(seeds.mh.sp, sampling_point, sample_area_m2)), by = "sampling_point") %>% 
+  dplyr::select(mh, sampling_point, sample_area_m2, bird_sp, nseed) %>% 
+  mutate(mh = ifelse(stringr::str_starts(sampling_point, "OA"), "OA", mh))
+
+seeds.mh.sp <- full_join(seeds.mh.sp, unobs)
+```
+
+
+
+
+Calculate total number of **bird-identified** seeds per MH sampling point: 
+
+```{r }
+
+seeds.mh.id <- seeds.mh.sp %>% 
+  group_by(sampling_point) %>% 
+  summarise(nseed.total = sum(nseed))
+
+seeds.mh.sp <- seeds.mh.sp %>% 
+  left_join(seeds.mh.id, by = "sampling_point") %>% 
+  mutate(nseed.bird.prop = nseed/nseed.total) %>% 
+  ungroup() %>% 
+  arrange(sampling_point, bird_sp)
+
+seeds.mh.sp$row <- 1:nrow(seeds.mh.sp)
+
+```
+
+
+
+#### 2.2 Model
+
+
+
+```{r }
+
+options(brms.backend = "cmdstanr")
+
+Pbird.formu <- bf(nseed | trials(nseed.total) ~
+                    1 + mh + (1 + mh | bird_sp),
+                  family = binomial())
+
+get_prior(Pbird.formu, data = seeds.mh.sp)
+
+# priors (logit scale)
+# plogis(-6) = 0.0025
+# plogis(-7) = 0.0009
+# plogis(-8) = 0.00033
+
+# plogis(-2) = 0.12   
+# plogis(-3) = 0.047
+# plogis(-1) = 0.27
+# plogis(-4) = 0.018
+# plogis(0) = 0.5
+
+priors <- c(
+  prior(normal(-3.3, 1), class = "Intercept"),     #plogis(-3.3) ~~ 1/27 bird spp
+  prior(normal(0, 2), class = "sd"),
+  prior(lkj(2), class = "cor")  # https://bookdown.org/content/4857/adventures-in-covariance.html
+)
+
+```
+
+
+
+Prior predictive check:
+
+```{r eval=FALSE}
+
+Pbird.m <- brm(Pbird.formu,
+         data = seeds.mh.sp,
+         prior = priors,
+         sample_prior = "only",
+         cores = 4,
+         iter = 2000,
+         refresh = 0)
+
+# stancode(Nseed.m)
+pp_check(Pbird.m, ndraws = 100)
+pp_check(Pbird.m, ndraws = 100) + coord_cartesian(xlim = c(0, 5))
+summary(Pbird.m, priors = TRUE)
+plot(Pbird.m)
+
+```
+
+
+Fit model:
+
+```{r cache = TRUE}
+Pbird.m <- brm(Pbird.formu,
+         data = seeds.mh.sp,
+         prior = priors,
+         cores = 4,
+         iter = 4000,
+         refresh = 0)
+```
+
+
+Check:
+
+```{r }
+
+pp_check(Pbird.m, ndraws = 100)
+pp_check(Pbird.m, ndraws = 100) + coord_cartesian(xlim = c(0, 5), ylim = c(0, 1))
+pp_check(Pbird.m, ndraws = 100, type = "bars") + coord_cartesian(xlim = c(0, 5))
+# pp_check(Pvisit.m, ndraws = 100, type = "error_scatter_avg")
+# suppressWarnings(bayestestR::check_prior(Pbird.m))
+
+summary(Pbird.m, priors = TRUE)
+
+plot(Pbird.m, ask = FALSE)
+
+stancode(Pbird.m)
+
+lapply(coef(Pbird.m), head)
+fixef(Pbird.m)
+# ranef(Pbird.m)
+
+# mcmc_plot(Pbird.m, pars = "id_plant")
+# launch_shinystan(Pvisit.m)
+
+#DHARMa
+Pbird.check <- check_brms(Pbird.m, integer = TRUE)
+plot(Pbird.check, form = seeds.mh.sp$bird_sp)
+plot(Pbird.check, form = seeds.mh.sp$mh)
+testDispersion(Pbird.check)
+
+saveRDS(Pbird.m, here("analysis", "output", paste0("Pbird.mh.model.rds")))
+```
+
+
+
+Predict:
+
+```{r }
+## Full posterior distributions
+
+newdt <- expand.grid(nseed.total = 1, 
+                     mh = sort(unique(seeds.mh.sp$mh)),
+                     bird_sp = sort(unique(seeds.mh.sp$bird_sp))
+)
+
+Pbird.post <- posterior_linpred(Pbird.m, 
+                                newdata = newdt,
+                                ndraws = 1000) %>% 
+  as.data.frame() %>%
+  setNames(paste(newdt$mh, newdt$bird_sp, sep = "_")) %>% 
+  tidyr::pivot_longer(cols = everything(), names_to = "mh.bird", values_to = "Pbird.logit") %>% 
+  tidyr::separate(mh.bird, c("mh", "bird_sp"), sep = "_") %>% 
+  arrange(mh, bird_sp) %>% 
+  mutate(Pbird = plogis(Pbird.logit))
+
+
+saveRDS(Pbird.post, here("analysis", "output", "Pbird.mh.post.rds"))
+
+Pbird.post %>% 
+  group_by(mh, bird_sp) %>% 
+  summarise(mean.Pbird = mean(Pbird)) %>% 
+  arrange(bird_sp, mh, desc(mean.Pbird)) %>% 
+  kable(digits = 2)
+
+```
+
+
+
+
+## Calculate Number of seeds dispersed by each bird on each MH
+
+The number of seeds from each bird species to each MH can be calculated as the product of the number of seeds arriving at each MH X Probability that seed came from a particular bird species (i.e. multiply posterior of model 1 and model 2)
+
+```{r }
+Nseed.post.long <- readRDS(here("analysis", "output", "Nseed.mh.post.rds"))
+Pbird.post <- readRDS(here("analysis", "output", "Pbird.mh.post.rds"))
+```
+
+
+Calculate number of seeds arriving at each MH by each bird:
+
+```{r}
+
+n.mh.bird <- length(unique(seeds.mh.sp$mh))*length(unique(seeds.mh.sp$bird_sp)) 
+# 5 mh * 27 bird spp = 135
+
+Pbird.post <- Pbird.post %>% 
+  mutate(seeds.m2 = case_when(
+    mh == "PL" ~ rep(Nseed.post.long$seeds.m2[Nseed.post.long$mh == "PL"], times = n.mh.bird),
+    mh == "FR" ~ rep(Nseed.post.long$seeds.m2[Nseed.post.long$mh == "FR"], times = n.mh.bird),
+    mh == "NF" ~ rep(Nseed.post.long$seeds.m2[Nseed.post.long$mh == "NF"], times = n.mh.bird),
+    mh == "OA" ~ rep(Nseed.post.long$seeds.m2[Nseed.post.long$mh == "OA"], times = n.mh.bird),
+    mh == "PP" ~ rep(Nseed.post.long$seeds.m2[Nseed.post.long$mh == "PP"], times = n.mh.bird)
+  )) %>% 
+  mutate(seeds.m2.bird = seeds.m2 * Pbird)
+
+Pbird.post %>% 
+  group_by(bird_sp, mh) %>% 
+  summarise(mean(seeds.m2.bird)) %>% 
+  kable(digits = 1)
+
+saveRDS(Pbird.post, here("analysis", "output", "seeds.m2.bird.mh.rds"))
+```
+
+
+Calculate, for each bird species, the Probability of dispersing seeds towards each MH:
+
+```{r}
+Pbird.list <- Pbird.post %>% 
+  select(mh, bird_sp, seeds.m2.bird) %>% 
+  split(f = ~bird_sp)
+
+Pbird.mh.list <- lapply(Pbird.list, calc_prob_bird_mh)
+
+Pbird.mh <- bind_rows(Pbird.mh.list)
+
+saveRDS(Pbird.mh, here("analysis", "output", "Pdisperse.bird.mh.rds"))
+
+Pbird.mh %>% 
+  group_by(bird_sp, mh) %>% 
+  summarise(median(Prob.bird.mh)) %>% 
+  kable(digits = 2)
+```
+
+
+
+
+```{r}
+sessioninfo::session_info()
+```
+

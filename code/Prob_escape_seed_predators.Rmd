@@ -1,0 +1,142 @@
+---
+title: "Probability of escaping seed predators"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+
+```{r setup, include=FALSE}
+set.seed(888)
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, out.width = '100%', 
+                      cache = TRUE, message = FALSE)
+```
+
+```{r }
+library(here)
+library(readr)
+library(dplyr)
+library(ggplot2)
+suppressPackageStartupMessages(library(tidylog))
+
+source(here("code", "functions.R"))
+
+theme_set(theme_minimal())
+```
+
+
+Load data
+
+```{r}
+escape.data <- read_csv(here("data", "seed_predators_escape.csv"), guess_max = 10000) %>% 
+  mutate(total.seeds = predated.seeds + entire.seeds) %>% 
+  mutate(row = 1:nrow(.))
+escape.data
+```
+
+
+### Prior Predictive Check
+
+
+```{r }
+library(brms)
+
+escape.formu <- brmsformula(entire.seeds | trials(total.seeds) ~ (1 | row),
+                            family = binomial)
+
+get_prior(escape.formu, data = escape.data)
+
+# priors (logit scale)
+# plogis(-6.9) = 0.001 (1 seed per thousand escaping predation)
+priors <- c(
+  prior(normal(-6.9, 2), class = "Intercept"),
+  prior(normal(0, 1), class = "sd")
+)
+```
+
+
+Prior predictive check:
+
+```{r eval=FALSE}
+escape.m <- brm(escape.formu,
+         data = escape.data,
+         prior = priors,
+         sample_prior = "only",
+         cores = 4,
+         iter = 2000,
+         refresh = 0)
+
+# stancode(escape.m)
+pp_check(escape.m, ndraws = 100) + coord_cartesian(xlim = c(0, 10)) 
+summary(escape.m, priors = TRUE)
+plot(escape.m)
+```
+
+
+
+### Fit model
+
+
+```{r }
+escape.m <- brm(escape.formu,
+         data = escape.data,
+         prior = priors,
+         cores = 4,
+         iter = 4000,
+         refresh = 0)
+```
+
+
+Check: 
+
+```{r }
+library(DHARMa)
+
+pp_check(escape.m, ndraws = 100)
+bayesplot::ppc_rootogram(y = escape.data$entire.seeds, 
+                         yrep = posterior_predict(escape.m, ndraws = 1000))
+bayestestR::check_prior(escape.m)
+
+summary(escape.m, priors = TRUE)
+
+plot(escape.m)
+
+stancode(escape.m)
+
+# coef(escape.m)
+#fixef(escape.m)
+#ranef(escape.m)
+
+#mcmc_plot(escape.m, pars = "sampling_point")
+# launch_shinystan(escape.m)
+
+#DHARMa
+escape.check <- check_brms(escape.m, integer = TRUE)
+testDispersion(escape.check)
+# testUniformity(escape.check)
+
+saveRDS(escape.m, here("analysis", "output", "escape.model.rds"))
+
+```
+
+
+
+### Extract probability of escaping seed predation
+
+```{r }
+
+prob.escape <- data.frame(prob.escape = plogis(
+  sample(fixef(escape.m, summary = FALSE), size = 1000, replace = FALSE))) 
+
+summary(prob.escape$prob.escape)
+
+saveRDS(prob.escape, here("analysis", "output", "prob.escape.rds"))
+
+```
+
+
+
+```{r}
+sessioninfo::session_info()
+```
+
