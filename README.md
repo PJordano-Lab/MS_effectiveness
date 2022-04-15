@@ -8,7 +8,7 @@ Authors: Elena Quintero, Francisco Rodríguez-Sánchez and Pedro Jordano.
 
 Data: Open Data Commons Attribution Licence https://opendatacommons.org/licenses/by/1.0/
 
-Code: MIT license
+Code: MIT license (see MIT-license.txt)
 
 
 
