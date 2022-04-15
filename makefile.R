@@ -110,15 +110,26 @@ render("code/Null_model_asym_sig.Rmd")
 
 ## OTHER #######################################################
 
-#### Suppl. Mat. Fig - Accumulation curves
+#### Suppl. Mat. Fig - Probability of bird visit (barcoding - Madroñas)
+source("code/figscode/Fig_Madronas_Pvisit_bc.R")
 
-#### Suppl. Mat. Fig - Predation and Germination
+#### Suppl. Mat. Fig - Probability of bird visit (barcoding & cameras - Puntal)
+source("code/figscode/Fig_Puntal_Pvisit_bc_cam.R")
 
-#### Suppl. Mat. Fig - Fruit quality
+#### Suppl. Mat. Fig - Probability of feeding per visit
+source("code/figscode/Fig_Pfeed.R")
 
-#### Suppl. Mat. Fig - MH use and suitability
+#### Suppl. Mat. Fig - Number of fruits consumed per visit
+source("code/figscode/Fig_Nfruits_visit.R")
 
-#### Suppl. Mat. Fig - Individual plant's crop consumption
+#### Suppl. Mat. Fig - Postdispersal predation
+source("code/figscode/Fig_postdispersal_predation.R")
 
-#### Suppl. Mat. Fig - Fruit availability vs. Crop consumption
+#### Suppl. Mat. Fig - Postdispersal predation
+source("code/figscode/Fig_seedling_survival.R")
+
+#### Suppl. Mat. Fig - SDE Quality
+source("code/figscode/Fig_SDE_QLTY.R")
+
+
 

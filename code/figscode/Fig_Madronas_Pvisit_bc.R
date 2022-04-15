@@ -5,7 +5,7 @@ library(ggdist)
 source(here("R", "functions.R"))
 theme_set(theme_minimal())
 
-Pvisit.sp <- readRDS(here("analysis", "output", paste0("bc.Pvisit.sp.Madronas.rds"))) %>% 
+Pvisit.sp <- readRDS(here("data", "bc.Pvisit.sp.Madronas.rds")) %>% 
   mutate(bird_sp = ifelse(bird_sp == "Sylvia communis", "Curruca communis", bird_sp),
          bird_sp = ifelse(bird_sp == "Sylvia melanocephala", "Curruca melanocephala", bird_sp),
          bird_sp = ifelse(bird_sp == "Sylvia undata", "Curruca undata", bird_sp),

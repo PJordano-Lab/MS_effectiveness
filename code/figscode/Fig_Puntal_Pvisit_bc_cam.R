@@ -8,7 +8,7 @@ theme_set(theme_minimal())
 
 # Load data
 
-fulldata <- readRDS(here("analysis", "output", "PV.Puntal.combined.rds")) %>% 
+fulldata <- readRDS(here("data", "PV.Puntal.combined.rds")) %>% 
   mutate(bird_sp = ifelse(bird_sp == "Sylvia communis", "Curruca communis", bird_sp),
          bird_sp = ifelse(bird_sp == "Sylvia melanocephala", "Curruca melanocephala", bird_sp),
          bird_sp = ifelse(bird_sp == "Sylvia undata", "Curruca undata", bird_sp),

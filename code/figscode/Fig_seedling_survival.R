@@ -3,7 +3,7 @@ library(here)
 library(tidyverse)
 library(ggdist)
 
-surv <- readRDS(here("analysis", "output", "surv.mh.post.rds")) 
+surv <- readRDS(here("data", "surv.mh.post.rds")) 
 
 # ggplot(surv) +
 #   geom_density(aes(surv.avg), fill = "lightgrey") +

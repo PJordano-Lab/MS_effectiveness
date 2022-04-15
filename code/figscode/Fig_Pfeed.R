@@ -3,7 +3,7 @@ library(here)
 library(tidyverse)
 library(ggdist)
 
-Pfeed <- readRDS(here("analysis", "output", "Pfeed.post.rds")) %>% 
+Pfeed <- readRDS(here("data", "Pfeed.post.rds")) %>% 
   mutate(bird_sp = ifelse(bird_sp == "Sylvia communis", "Curruca communis", bird_sp),
          bird_sp = ifelse(bird_sp == "Sylvia melanocephala", "Curruca melanocephala", bird_sp),
          bird_sp = ifelse(bird_sp == "Sylvia undata", "Curruca undata", bird_sp),

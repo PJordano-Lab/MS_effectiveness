@@ -4,7 +4,7 @@ library(tidyverse)
 library(ggdist)
 theme_set(theme_minimal())
 
-qlt <- readRDS(here("analysis", "output", "SDE_QLTY_total.rds"))  %>% 
+qlt <- readRDS(here("data", "SDE_QLTY_total.rds"))  %>% 
   mutate(bird_sp = ifelse(bird_sp == "Sylvia communis", "Curruca communis", bird_sp),
          bird_sp = ifelse(bird_sp == "Sylvia melanocephala", "Curruca melanocephala", bird_sp),
          bird_sp = ifelse(bird_sp == "Sylvia undata", "Curruca undata", bird_sp),
