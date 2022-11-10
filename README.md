@@ -6,7 +6,7 @@ Authors: Elena Quintero, Francisco Rodríguez-Sánchez and Pedro Jordano.
 
 ## Licenses
 
-Data: Open Data Commons Attribution Licence https://opendatacommons.org/licenses/by/1.0/
+Data: Creative Commons Licence
 
 Code: MIT license (see MIT-license.txt)
 
