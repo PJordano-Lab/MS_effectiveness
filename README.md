@@ -8,7 +8,7 @@ Authors: Elena Quintero, Francisco Rodríguez-Sánchez and Pedro Jordano.
 
 Data: [CC0](https://creativecommons.org/share-your-work/public-domain/cc0/)
 
-Code: [CC0](https://creativecommons.org/share-your-work/public-domain/cc0/)
+Code: MIT license (see MIT-license.txt)
 
 
 
