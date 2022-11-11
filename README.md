@@ -6,9 +6,9 @@ Authors: Elena Quintero, Francisco Rodríguez-Sánchez and Pedro Jordano.
 
 ## Licenses
 
-Data: Creative Commons Licence
+Data: [CC0](https://creativecommons.org/share-your-work/public-domain/cc0/)
 
-Code: MIT license (see MIT-license.txt)
+Code: [CC0](https://creativecommons.org/share-your-work/public-domain/cc0/)
 
 
 
