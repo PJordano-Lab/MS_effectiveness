@@ -40,7 +40,7 @@ Dataset and code present in this project are designed to calculate the effective
 
 #### Dataset description:
 
-All the variables present within the datasets are described in the metadata folder. Data was collected in a shrubland dominated by *Pistacia lentiscus* in Doñana National Park (Huelva, Spain).
+All the variables present within the datasets are described in the METADATA.csv. Data was collected in a shrubland dominated by *Pistacia lentiscus* in Doñana National Park (Huelva, Spain).
 
 -   *bc_indiv_lentisc.csv* - DNA-barcoding identification of bird samples collected underneath individual plants of *Pistacia lentiscus*.
 

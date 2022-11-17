@@ -1,0 +1,283 @@
+fileName;variableName;description;unitText
+asymm_null_models_patefield.rds;null.as;Unique pairwise interaction - i.e. combination of individual plant and bird species found interacting with it. For each unique interaction there is 1000 calculated asymmetry values (in columns) generated from 1000 random interaction matrices following Patefiled null model.;NA
+asymm_null_models_vazquez.rds;null.as.vaz;Unique pairwise interaction - i.e. combination of individual plant and bird species found interacting with it. For each unique interaction there is 1000 calculated asymmetry values (in columns) generated from 1000 random interaction matrices following Vazquez null model.;NA
+bc_indiv_lentisc.csv;site;Site where data was collected (n = 2);El Puntal (EP) or Laguna de las Madro–as (LM)
+bc_indiv_lentisc.csv;id_plant;Individual plant identification number (n = 80);from 301 to 383
+bc_indiv_lentisc.csv;trap_area;Area of seed trap used;square meters
+bc_indiv_lentisc.csv;id_dropping;Unique identification number of sample collected for DNA-barcoding analysis;NA
+bc_indiv_lentisc.csv;date_collection;Date when sample was collected;format: YYYY-MM-DD
+bc_indiv_lentisc.csv;regurg;Whether seed sample collected seemed to be regurgitated;"4 levels: ""yes"", ""no"", ""prob"" (probably) or ""unknown"""
+bc_indiv_lentisc.csv;seed_sp1;Species of seed found in the sample;NA
+bc_indiv_lentisc.csv;seed_n1;Number of seeds found in the sample for seed_sp1;NA
+bc_indiv_lentisc.csv;seed_sp2;Additional second species of seed found in the sample;NA
+bc_indiv_lentisc.csv;seed_n2;Number of seeds found in the sample for seed_sp2;NA
+bc_indiv_lentisc.csv;viability;Whether seed sample floated or sink during DNA-barcoding protocol indicating its viability;2 levels: FLOAT or SINK
+bc_indiv_lentisc.csv;barcoded;Whether sample went through the DNA-barcoding protocol;2 levels: 'yes' or 'no'
+bc_indiv_lentisc.csv;bird_sp;Bird species identified with DNA barcoding;NA
+bc_indiv_lentisc.csv;bird_sp_short;Abbreviated name of bird species identified with DNA barcoding;NA
+bc_indiv_lentisc.csv;bc_criteria;"Criteria followed for bird species identificaition based on DNA sequence quality. Categories: 'A' =  > 150 base pairs and > 99% similarity; 'B' = > 150 bp and 90 - 99 % similarity where the next species' similarity is further than 3%; 'C' = samples with > 150 bp or > 90 - 99 % similarity where the next species' similarity is between 2-3% distance; 'E' = > 150 bp and 90 - 99 % similarity where the next species' similarity is smaller than 2% distance but is absent in the geographical area;  'low_bp_similarity': samples with < 150 bp or < 90 - 99 % similarity (not considered for analysis).";5 levels
+bc.indiv.Madronas.Nvisits.post.long.rds;site;Site where data was collected (n = 2);NA
+bc.indiv.Madronas.Nvisits.post.long.rds;id_plant;Individual plant identification number;NA
+bc.indiv.Madronas.Nvisits.post.long.rds;visits;Number of visits;NA
+bc.indiv.Puntal.Nvisits.post.long.rds;site;Site where data was collected (n = 2);NA
+bc.indiv.Puntal.Nvisits.post.long.rds;id_plant;Individual plant identification number;NA
+bc.indiv.Puntal.Nvisits.post.long.rds;visits;Number of visits;NA
+bc.Pvisit.sp.Madronas.rds;site;Site where data was collected (n = 2);NA
+bc.Pvisit.sp.Madronas.rds;id_plant;Individual plant identification number;NA
+bc.Pvisit.sp.Madronas.rds;bird_sp;Bird species name;NA
+bc.Pvisit.sp.Madronas.rds;PVindiv;Relative probability of visit at an individual plant;NA
+bc.Pvisit.sp.Madronas.rds;Pbird;Probability that a given visit is from a given bird species;NA
+bc.Pvisit.sp.Madronas.rds;Pvisit.sp;Probability of bird species visiting individual plant;NA
+bc.Pvisit.sp.Puntal.rds;site;Site where data was collected (n = 2);NA
+bc.Pvisit.sp.Puntal.rds;id_plant;Individual plant identification number;NA
+bc.Pvisit.sp.Puntal.rds;bird_sp;Bird species name;NA
+bc.Pvisit.sp.Puntal.rds;PVindiv;Relative probability of visit at an individual plant;NA
+bc.Pvisit.sp.Puntal.rds;Pbird;Probability that a given visit is from a given bird species;NA
+bc.Pvisit.sp.Puntal.rds;Pvisit.sp;Probability of bird species visiting individual plant;NA
+BirdFuncDat.txt;;see original dataset for metadata: https://figshare.com/collections/EltonTraits_1_0_Species-level_foraging_attributes_of_the_world_s_birds_and_mammals/3306933/1;NA
+cam_indiv_lentisc.csv;id_plant;Individual plant identification number (n = 80);from 301 to 383
+cam_indiv_lentisc.csv;cam_period;Month and fornight period when camera was recording;format: YYYY-MM-DD
+cam_indiv_lentisc.csv;date_recording;Date camera was placed;format: YYYY-MM-DD
+cam_indiv_lentisc.csv;id_video;Unique identifier for video recording;NA
+cam_indiv_lentisc.csv;rec_time_hours;Number of hours camera recorded;hours
+cam_indiv_lentisc.csv;bird_sp;Bird species identified in video;NA
+cam_indiv_lentisc.csv;bird_sp_short;Abbreviated name of bird species identified in video;NA
+cam_indiv_lentisc.csv;feeding;Whether bird was seen feeding in the video;"4 levels: ""yes"", ""no"", ""likely"" or ""unknown"""
+cam_indiv_lentisc.csv;fruit_visit;Number of fruits consumed per visit;NA
+cam_indiv_lentisc.csv;visit_length_sec;Lenght of visit duration in seconds;seconds
+cam.Pvisit.sp.Puntal.rds;id_plant;Individual plant identification number;NA
+cam.Pvisit.sp.Puntal.rds;bird_sp;Bird species name;NA
+cam.Pvisit.sp.Puntal.rds;PVindiv;Relative probability of visit at an individual plant;NA
+cam.Pvisit.sp.Puntal.rds;Pbird;Probability that a given visit is from a given bird species;NA
+cam.Pvisit.sp.Puntal.rds;Pvisit.sp;Probability of bird species visiting individual plant;NA
+consumed_fruit_mat.csv;id_plant;Individual plant identification number;NA
+consumed_fruit_mat.csv;bird_sp (each column);Bird species abbreviated name: Cya.cae = Cyanistes caeruleus, Chl.chl = Chloris chloris, Coc.coc = Coccothraustes coccothraustes, Syl.com = Sylvia communis, Cya.coo = Cyanopica cooki, Syl.hor = Sylvia hortensis, Syl.can = Sylvia cantillans, Syl.mel = Sylvia melanocephala, Col.pal = Columba palumbus, Syl.und = Sylvia undata, Eri.rub = Erithacus rubecula, Fri.coe = Fringilla coelebs, Fic.hyp = Ficedula hypoleuca, Hip.pol = Hippolais polyglotta, Lus.meg = Luscinia megarhynchos, Lan.mer = Lanius meridionalis, Mus.str = Muscicapa striata, Par.maj = Parus major, Pho.pho = Phoenicurus phoenicurus, Pyr.pyr = Pyrrhula pyrrhula, Syl.atr = Sylvia atricapilla, Syl.bor = Sylvia borin, Sax.rub = Saxicola rubicola, Stu.uni = Sturnus unicolor, Tur.mer = Turdus merula, Tur.phi = Turdus philomelos, Tur.vis = Turdus viscivorus. ;number of fruits consumed
+Dependency_distribution.rds;pdp;Unique identifier for the iteration number of the posterior distribution probability calculated (pdp) (n=1000);NA
+Dependency_distribution.rds;bird_sp;Bird species name;NA
+Dependency_distribution.rds;rpe.animal.1.pdp;Total Resource Provisioning Effectiveness obtained at all plants where a bird species consumed (different for each bayes iteration) ;NA
+Dependency_distribution.rds;id_plant;Individual plant identification number;NA
+Dependency_distribution.rds;rpe.eff;Resource Provisioning Effectiveness obtained at an individual plant;NA
+Dependency_distribution.rds;rpe.dep;Bird dependence value on a specific plant (rpe.eff/rep.animal.pdp);NA
+Dependency_distribution.rds;sde.plant.1.pdp;Total Seed Dispersal Effectiveness that a given plant obtained from all the bird species that consumed from it (different for each bayes iteration) ;NA
+Dependency_distribution.rds;sde.eff;Seed Dispersal Effectiveness obtained from a given bird species;NA
+Dependency_distribution.rds;sde.dep;Plant dependence value on a specific animal (sde.eff/sde.plant.pdp);NA
+Dependency_distribution.rds;asy.num;Asymmetry numerator (sde.dep-rpe.dep);NA
+Dependency_distribution.rds;asy.denom;Asymmetry denominator (maximun value of sde.dep or rpe.dep);NA
+Dependency_distribution.rds;asymmetry;Asymmetry value for mutual partner dependence;NA
+dron_areas.csv;plant_id;Individual plant identification number;NA
+dron_areas.csv;area_new;Area of seed trap used;meters
+dron_areas.csv;site;Site where data was collected (n = 2);NA
+Effectiveness_correlation_slope_CI_sd.rds;;Dataset containing in rows the observed median rpe value (X) for each plant (n=79) and in columns and the predicted sde value (Y) for each of the 1000 models. Obs: this dataset considers RPE and SDE values that are calculated using only legitimate seed dispersing species;NA
+Effectiveness_correlation_slope_CI.rds;;Dataset containing in rows the observed median rpe value (X) for each plant (n=79) and in columns and the predicted sde value (Y) for each of the 1000 models.;NA
+Effectiveness_correlation_slopes_sd.rds;pdp;Unique identifier for the iteration number of the posterior distribution probability calculated (pdp) (n=1000).;NA
+Effectiveness_correlation_slopes_sd.rds;(Intercept);Intercept value for model correlation between individual plant's RPE and SDE (n=1000 models). Obs: this dataset considers RPE and SDE values that are calculated using only legitimate seed dispersing species.;NA
+Effectiveness_correlation_slopes_sd.rds;log(plant_rpe);Estimate value (i.e. slope) for model correlation between individual plant's RPE and SDE (n=1000 models). Obs: this dataset considers RPE and SDE values that are calculated using only legitimate seed dispersing species.;NA
+Effectiveness_correlation_slopes.rds;pdp;Unique identifier for the iteration number of the posterior distribution probability calculated (pdp) (n=1000);NA
+Effectiveness_correlation_slopes.rds;(Intercept);Intercept value for model correlation between individual plant's RPE and SDE (n=1000 models);NA
+Effectiveness_correlation_slopes.rds;log(plant_rpe);Estimate value (i.e. slope) for model correlation between individual plant's RPE and SDE (n=1000 models);NA
+Effectiveness_plants_no_pred.rds;pdp;Unique identifier for the iteration number of the posterior distribution probability calculated (pdp) (n=1000).;NA
+Effectiveness_plants_no_pred.rds;id_plant;Individual plant identification number;NA
+Effectiveness_plants_no_pred.rds;plant_sde;Estimated SDE value for a given individual plant (aggregating the SDE of its  interactions with bird species). Obs: this dataset considers RPE and SDE values for plants that are calculated using only legitimate seed dispersing species.;NA
+Effectiveness_plants_no_pred.rds;plant_rpe;Estimated RPE value that a given individual plant provides (aggregating the RPE of its interactions with bird species). Obs: this dataset considers RPE and SDE values for plants that are calculated using only legitimate seed dispersing species.;NA
+Effectiveness_plants.rds;pdp;Unique identifier for the iteration number of the posterior distribution probability calculated (pdp) (n=1000).;NA
+Effectiveness_plants.rds;id_plant;Individual plant identification number.;NA
+Effectiveness_plants.rds;plant_sde;Estimated SDE value for a given individual plant (aggregating the SDE of its  interactions with bird species).;NA
+Effectiveness_plants.rds;plant_rpe;Estimated RPE value that a given individual plant provides (aggregating the RPE of its interactions with bird species).;NA
+effectiveness_summary.csv;id_plant;Individual plant identification number.;NA
+effectiveness_summary.csv;bird_sp;Bird species name.;NA
+effectiveness_summary.csv;mean.sde.qtc;Mean Seed Dispersal Effectiveness Quantity subcomponent;NA
+effectiveness_summary.csv;median.sde.qtc;Median Seed Dispersal Effectiveness Quantity subcomponent;NA
+effectiveness_summary.csv;mean.sde.qlc;Mean Seed Dispersal Effectiveness Quality subcomponent;NA
+effectiveness_summary.csv;median.sde.qlc;Median Seed Dispersal Effectiveness Quality subcomponent;NA
+effectiveness_summary.csv;mean.rpe.qtc;Mean Resource Provisioning Effectiveness Quantity subcomponent;NA
+effectiveness_summary.csv;median.rpe.qtc;Median Resource Provisioning Effectiveness Quantity subcomponent;NA
+effectiveness_summary.csv;mean.rpe.qlc;Mean Resource Provisioning Effectiveness Quality subcomponent;NA
+effectiveness_summary.csv;median.rpe.qlc;Median Resource Provisioning Effectiveness Quality subcomponent;NA
+effectiveness_summary.csv;initcrop;Initial fruit crop size of individual plant;NA
+effectiveness_summary.csv;area;Plant crown's area;sq meters
+effectiveness_summary.csv;median.sde.qlc.FR;Median Seed Dispersal Effectiveness Quality that a bird species has at FR microhabitat;NA
+effectiveness_summary.csv;median.sde.qlc.NF;Median Seed Dispersal Effectiveness Quality that a bird species has at NF microhabitat;NA
+effectiveness_summary.csv;median.sde.qlc.OA;Median Seed Dispersal Effectiveness Quality that a bird species has at OA microhabitat;NA
+effectiveness_summary.csv;median.sde.qlc.PP;Median Seed Dispersal Effectiveness Quality that a bird species has at PP microhabitat;NA
+effectiveness_summary.csv;median.sde.qlc.PL;Median Seed Dispersal Effectiveness Quality that a bird species has at PL microhabitat;NA
+effectiveness_summary.csv;mean.sde;Mean total Seed Dispersal Effectiveness;NA
+effectiveness_summary.csv;median.sde;Median total Seed Dispersal Effectiveness;NA
+effectiveness_summary.csv;mean.rpe;Mean total Resource Provisioning Effectiveness;NA
+effectiveness_summary.csv;median.rpe;Median total Resource Provisioning Effectiveness;NA
+effectiveness.rds;site;Site where data was collected (n = 2);NA
+effectiveness.rds;id_plant;Individual plant identification number;NA
+effectiveness.rds;bird_sp;Bird species name;NA
+effectiveness.rds;qty.fru.manipulated;Number of fruits manipulated by bird at individual plants;NA
+effectiveness.rds;qty.fru.consumed;Number of fruits consumed by bird at individual plants (subtracting those fruits that fell during manipulation by finches);NA
+effectiveness.rds;fruit.reward;Fruit energetic yield (RPE Quality subcomponent) referred to the seed or the pulp depending on the fruit feeding behaviour of the bird species;Kilojoules
+effectiveness.rds;sde.qlc;Probability a consumed fruit turns into a seedling (SDE Quality subcomponent);NA
+effectiveness.rds;Nvisit.site;Total number of bird visits at a site;NA
+effectiveness.rds;Pvisit.sp;Probability of bird species visiting individual plant;NA
+effectiveness.rds;Pfeed;Probability a visiting bird consumes fruits - i.e. probability of feeding during visit;NA
+effectiveness.rds;Nfruits;Number of fruits consumed per visit;NA
+effectiveness.rds;pulp_weight;Weight of Pistacia lentiscus fruit pulp for a given individual;need to multiply by 10-4 to convert to grams
+effectiveness.rds;seed_weight;Weight of Pistacia lentiscus seed for a given individual;need to multiply by 10-4 to convert to grams
+effectiveness.rds;PWP;Percentage of water in pulp (constant);NA
+effectiveness.rds;SWP;Percentage of water in seed (constant);NA
+effectiveness.rds;P.energy;Pulp energetic yield per gram of dry mass of Pistacia lentiscus fruit (constant);KJ/g of dry mass
+effectiveness.rds;S.energy;Seed energetic yield per gram of dry mass of Pistacia lentiscus fruit (constant);KJ/g of dry mass
+effectiveness.rds;p.reward;Total pulp energetic yield in the fruit of a given plant;Kilojoules
+effectiveness.rds;s.reward;Total seed energetic yield in the fruit of a given plant;Kilojoules
+effectiveness.rds;Prob.escape.bird.pred;Probability a manipulated seed escapes granivorous bird predation;NA
+effectiveness.rds;Prob.bird.disperse.mh_FR;Probability a given bird species deposits a P. lentiscus seed in FR microhabitat;NA
+effectiveness.rds;Prob.bird.disperse.mh_NF;Probability a given bird species deposits a P. lentiscus seed in NF microhabitat;NA
+effectiveness.rds;Prob.bird.disperse.mh_OA;Probability a given bird species deposits a P. lentiscus seed in OA microhabitat;NA
+effectiveness.rds;Prob.bird.disperse.mh_PL;Probability a given bird species deposits a P. lentiscus seed in PL microhabitat;NA
+effectiveness.rds;Prob.bird.disperse.mh_PP;Probability a given bird species deposits a P. lentiscus seed in PP microhabitat;NA
+effectiveness.rds;Prob.escape.rodent.pred_FR;Probability a dispersed seed escapes rodent predation in FR microhabitat;NA
+effectiveness.rds;Prob.escape.rodent.pred_NF;Probability a dispersed seed escapes rodent predation in NF microhabitat;NA
+effectiveness.rds;Prob.escape.rodent.pred_OA;Probability a dispersed seed escapes rodent predation in OA microhabitat;NA
+effectiveness.rds;Prob.escape.rodent.pred_PL;Probability a dispersed seed escapes rodent predation in PL microhabitat;NA
+effectiveness.rds;Prob.escape.rodent.pred_PP;Probability a dispersed seed escapes rodent predation in PP microhabitat;NA
+effectiveness.rds;Prob.seedling.surv_FR;Probability a seed emerges and survives its first summer in FR microhabitat;NA
+effectiveness.rds;Prob.seedling.surv_NF;Probability a seed emerges and survives its first summer in NF microhabitat;NA
+effectiveness.rds;Prob.seedling.surv_OA;Probability a seed emerges and survives its first summer in OA microhabitat;NA
+effectiveness.rds;Prob.seedling.surv_PL;Probability a seed emerges and survives its first summer in PL microhabitat;NA
+effectiveness.rds;Prob.seedling.surv_PP;Probability a seed emerges and survives its first summer in PP microhabitat;NA
+effectiveness.rds;qlty.mh_FR;Probability a consumed fruit by a given bird species turns into a seedling in FR microhabitat;NA
+effectiveness.rds;qlty.mh_NF;Probability a consumed fruit by a given bird species turns into a seedling in NF microhabitat;NA
+effectiveness.rds;qlty.mh_OA;Probability a consumed fruit by a given bird species turns into a seedling in OA microhabitat;NA
+effectiveness.rds;qlty.mh_PL;Probability a consumed fruit by a given bird species turns into a seedling in PL microhabitat;NA
+effectiveness.rds;qlty.mh_PP;Probability a consumed fruit by a given bird species turns into a seedling in PP microhabitat;NA
+effectiveness.rds;area_new;Plant crown's area;sq meters
+effectiveness.rds;initcrop;Initial fruit crop size of individual plant;NA
+effectiveness.rds;sde;Seed Dispersal Effectiveness for a specific pairwise interaction;NA
+effectiveness.rds;rpe;Resource Provisioning Effectiveness for a specific pairwise interaction;NA
+fruit_characteristics.csv;plant_id;Individual plant identification number;NA
+fruit_characteristics.csv;fruit_weight;Weight of fruit for a given Pistacia lentiscus individual;need to multiply by 10-4 to convert to grams
+fruit_characteristics.csv;seed_weight;Weight of seed for a given Pistacia lentiscus individual;need to multiply by 10-4 to convert to grams
+fruit_characteristics.csv;pop;Site (or population) where data was collected (n = 2);NA
+fruit_traits_HR_pedro.csv;species;Plant species;NA
+fruit_traits_HR_pedro.csv;year;year when data was collected;NA
+fruit_traits_HR_pedro.csv;id_plant;Individual plant identification number;NA
+fruit_traits_HR_pedro.csv;pcta;Proportion of water in whole fruit;NA
+fruit_traits_HR_pedro.csv;pcas;Proportion of water in seed;NA
+fruit_traits_HR_pedro.csv;pcap;Proportion of water in pulp;NA
+lentisc_feeding_rates.csv;date;Date when video was recorded;NA
+lentisc_feeding_rates.csv;bird_sp;Bird species name;NA
+lentisc_feeding_rates.csv;no_fruits;Number of fruits consumed during visitation event;NA
+lentisc_feeding_rates.csv;visit_lenght_s;Lenght of bird visit;seconds
+lentisc_feeding_rates.csv;method;"Whether the video recorded was pointing at the full plant ""full_plant"" of zoomed into a certain branch ""close_up""";NA
+lentisc_feeding_rates.csv;bodymass;Bird's body mass;grams
+lentisc_feeding_rates.csv;bodymass.sd;Standard deviation bird's body mass;grams
+lentisc_feeding_rates.csv;gape_width;Bird's gape width;mm
+lentisc_feeding_rates.csv;gape_width.sd;Standard deviation bird's gape width;mm
+lentisc_feeding_rates.csv;diet;"Bird categorization in feeding behaviour: ""SD"" - Seed Disperser (gulper); ""SP"" - Seed Predator (granivorous ); ""PC/SD"" - Pulp Consumer and sometimes can act as Seed Disperser (masher)";NA
+mh_combined_barcoding.csv;id_plant;Individual plant identification number;NA
+mh_combined_barcoding.csv;id_dropping;Unique identification number of sample collected for DNA-barcoding analysis;NA
+mh_combined_barcoding.csv;date_collection;Date when sample was collected;NA
+mh_combined_barcoding.csv;regurg;Whether seed sample collected seemed to be regurgitated;NA
+mh_combined_barcoding.csv;seed_sp1;Species of seed found in the sample;NA
+mh_combined_barcoding.csv;seed_n1;Number of seeds found in the sample for seed_sp1;NA
+mh_combined_barcoding.csv;seed_sp2;Additional second species of seed found in the sample;NA
+mh_combined_barcoding.csv;seed_n2;Number of seeds found in the sample for seed_sp2;NA
+mh_combined_barcoding.csv;viability;Whether seed sample floated or sink during DNA-barcoding protocol indicating its viability;NA
+mh_combined_barcoding.csv;barcoded;Whether collected sample in the field went through the DNA-barcoding protocol;NA
+mh_combined_barcoding.csv;bird_sp;Bird species identified with DNA barcoding;NA
+mh_combined_barcoding.csv;bird_sp_short;Abbreviated name of bird species identified with DNA barcoding;NA
+mh_combined_barcoding.csv;bc_criteria;"Criteria followed for bird species identificaition based on DNA sequence quality. Categories: 'A' =  > 150 base pairs and > 99% similarity; 'B' = > 150 bp and 90 - 99 % similarity where the next species' similarity is further than 3%; 'C' = samples with > 150 bp or > 90 - 99 % similarity where the next species' similarity is between 2-3% distance; 'E' = > 150 bp and 90 - 99 % similarity where the next species' similarity is smaller than 2% distance but is absent in the geographical area;  'low_bp_similarity': samples with < 150 bp or < 90 - 99 % similarity (not considered for analysis).";NA
+mh_combined_barcoding.csv;mh;Microhabitat where seed was collected (five types);NA
+mh_combined_barcoding.csv;indiv_samp_eff;Sampling effort at each sampling point (could be seed trap area or open area transect);sq meters
+mh_combined_barcoding.csv;plant_sp;Plant species under which the sample was collected;NA
+mh_combined_barcoding.csv;seed_sp3;Additional third species of seed found in the sample;NA
+mh_combined_barcoding.csv;seed_n3;Number of seeds found in the sample for seed_sp3;NA
+mh_combined_barcoding.csv;seed_sp4;Additional fourth species of seed found in the sample;NA
+mh_combined_barcoding.csv;seed_n4;Number of seeds found in the sample for seed_sp4;NA
+mh_combined_barcoding.csv;total_samp_eff;Total sampling effort at each microhabitat;sq meters
+Nfruits_visit_post_long.rds;bird_sp;Bird species name;NA
+Nfruits_visit_post_long.rds;Nfruits;Number of fruits consumed at each plant;NA
+null_model_matrix_dimensions.rds;asymmetry;Asymmetry value for mutual partner dependence;NA
+null_model_matrix_dimensions.rds;permutation;Permutation identification number (n = 1000 per matrix size);NA
+null_model_matrix_dimensions.rds;size;Size of the matrix used to calculate assymetry;NA
+null_models_patefield.rds;;"List of 1000 randomized interaction matrices using ""consumed_fruit_mat.csv"" following Patefield null model";NA
+null_models_vazquez.rds;;"List of 1000 randomized interaction matrices using ""consumed_fruit_mat.csv"" following Vazquez null model";NA
+Nvisits.site.rds;visits.Mad;Total number of bird visits at Madronas site;NA
+Nvisits.site.rds;visits.Puntal;Total number of bird visits at El Puntal site;NA
+Nvisits.site.rds;visits.total;Total number of visits at both sites;NA
+Nvisits.site.rds;vis.prop.Mad;Proportion of visits to Madronas site;NA
+Nvisits.site.rds;vis.prop.Puntal;Proportion of visits to El Puntal site;NA
+Pdisperse.bird.mh.rds;bird_sp;Bird species name;NA
+Pdisperse.bird.mh.rds;mh;Microhabitat type (n=5);NA
+Pdisperse.bird.mh.rds;Prob.bird.mh;Probability a given bird species deposits a P. lentiscus seed in a microhabitat;NA
+Pfeed.post.rds;bird_sp;Bird species name;NA
+Pfeed.post.rds;Pfeed.logit;Logit of the probability that a visiting bird consumes fruits;NA
+Pfeed.post.rds;Pfeed;Probability a visiting bird consumes fruits - i.e. probability of feeding during visit;NA
+pred.mh.post.long.rds;mh;Microhabitat type (n=5);NA
+pred.mh.post.long.rds;Prob.escaping.pred;Probability a dispersed seed escapes rodent predation;NA
+prob.escape.rds;prob.escape;Probability a manipulated seed escapes granivorous bird predation;NA
+PV.Puntal.combined.rds;id_plant;Individual plant identification number;NA
+PV.Puntal.combined.rds;bird_sp;Bird species name;NA
+PV.Puntal.combined.rds;Pvisit.sp.bc;Probability a given bird visits an individual plant estimated using DNA-barcoding dataset;NA
+PV.Puntal.combined.rds;Pvisit.sp.cam;Probability a given bird visits an individual plant estimated using camera dataset;NA
+PV.Puntal.combined.rds;PV.combined;Combined probability a given bird visits an individual plant ;NA
+SDE_QLTY_mh.rds;bird_sp;Bird species name;NA
+SDE_QLTY_mh.rds;mh;Microhabitat type (n=5);NA
+SDE_QLTY_mh.rds;Prob.escape.rodent.pred;Probability a dispersed seed escapes rodent predation;NA
+SDE_QLTY_mh.rds;Prob.seedling.surv;Probability a seed emerges and survives its first summer;NA
+SDE_QLTY_mh.rds;Prob.recruit.mh;Probability of recruiting a seedling in a given microhabitat;NA
+SDE_QLTY_mh.rds;Prob.bird.disperse.mh;Probability a given bird disperses a seed to a given microhabitat;NA
+SDE_QLTY_mh.rds;Prob.bird.recruit.mh;Probability a given bird recruits a seedling in a given microhabitat;NA
+SDE_QLTY_mh.rds;Prob.escape.bird.pred;Probability a seed escapes bird predation;NA
+SDE_QLTY_mh.rds;qlty.mh;Microhabitat quality;NA
+SDE_QLTY_total.rds;bird_sp;Bird species name;NA
+SDE_QLTY_total.rds;FR;Probability of seedling recruitment by a given bird species at microhabitat FR;NA
+SDE_QLTY_total.rds;NF;Probability of seedling recruitment by a given bird species at microhabitat NF;NA
+SDE_QLTY_total.rds;OA;Probability of seedling recruitment by a given bird species at microhabitat OA;NA
+SDE_QLTY_total.rds;PL;Probability of seedling recruitment by a given bird species at microhabitat PL;NA
+SDE_QLTY_total.rds;PP;Probability of seedling recruitment by a given bird species at microhabitat PP;NA
+SDE_QLTY_total.rds;P.recruit;Total probability of seedling recruitment by a given bird species;NA
+SDE_QTY_crop_consumed_wide.rds;site;Site where data was collected (n = 2);NA
+SDE_QTY_crop_consumed_wide.rds;id_plant;Individual plant identification number;NA
+SDE_QTY_crop_consumed_wide.rds;initcrop;Initial fruit crop size of individual plant;NA
+SDE_QTY_crop_consumed_wide.rds;iter;Bayesian iteration identifier number (n=1000);NA
+SDE_QTY_crop_consumed_wide.rds;Colums with bird species name;each column refers to the number of fruits eaten by a given (column name) bird species;NA
+SDE_QTY_crop_consumed_wide.rds;fruits.consumed.total;Total number of fruits consumed at each plant;NA
+SDE_QTY_crop_consumed_wide.rds;fruits.unconsumed;Total number of fruits remaining at plant's crop that were not consumed;NA
+SDE_QTY_crop_consumed_wide.rds;prop.consum;Proportion of fruit crop consumed;NA
+SDE_QTY_Nfruits_escape.rds;site;Site where data was collected (n = 2);NA
+SDE_QTY_Nfruits_escape.rds;id_plant;Individual plant identification number;NA
+SDE_QTY_Nfruits_escape.rds;bird_sp;Bird species name;NA
+SDE_QTY_Nfruits_escape.rds;Pvisit.sp;Probability a given bird visits a plant;NA
+SDE_QTY_Nfruits_escape.rds;Nvisit.site;Total number of bird visits at a site;NA
+SDE_QTY_Nfruits_escape.rds;Pfeed;Probability a visiting bird consumes fruits - i.e. probability of feeding during visit;NA
+SDE_QTY_Nfruits_escape.rds;Nfruits;Number of fruits consumed per visit;NA
+SDE_QTY_Nfruits_escape.rds;Nvisit.sp;Total number of visits of a given bird ;NA
+SDE_QTY_Nfruits_escape.rds;qty.fru;Total number of fruits manipulated  at each plant;NA
+SDE_QTY_Nfruits_escape.rds;prob.escape;Probability a manipulated seed escapes granivorous bird predation;NA
+SDE_QTY_Nfruits_escape.rds;qty.fru.escape;Total number of fruits consumed at each plant;NA
+seed_predation.csv;id_station;Identification of microhabitat replicate where seed predation experiment was carried.;NA
+seed_predation.csv;mh;Microhabitat type (n=5). Under Pistacia lentiscus conspecifics (PL), under other fleshy fruited species (FR), under non-fleshy fruited species (NF), under pine trees Pinus pinea (PP), open ground areas (OA);NA
+seed_predation.csv;rev_date;Revision date of seed predation experiment;format: YYYY-MM-DD
+seed_predation.csv;experimental;Number of seeds found in experimental treatment (open);NA
+seed_predation.csv;control;Number of seeds found in control treatment (rodent access excluded);NA
+seed_predation.csv;day_since_install;Number of days passed since experiment installment;NA
+seedling_emergence.csv;season;Fruting when data was collected (either 2018-19 or 2019-20);NA
+seedling_emergence.csv;mh;Microhabitat type (n=5);NA
+seedling_emergence.csv;germin_station;Identification of microhabitat replicate where seed sowing experiment was carried.;NA
+seedling_emergence.csv;seed_position;The relative position in the experiment where the seed was sowed (allowing for individual seed identification);NA
+seedling_emergence.csv;seed_id;Individual sowed seed identification;NA
+seedling_emergence.csv;seed_mother;Maternal identification of where seed was collected;NA
+seedling_emergence.csv;mother_origin;Population where the seed's mother was located;NA
+seedling_emergence.csv;seed_color;Color of the fruit whose seed was extracted;NA
+seedling_emergence.csv;sowing_date;Date when seed was sown;NA
+seedling_emergence.csv;revision_date;Date of experiment revision;NA
+seedling_emergence.csv;alive;Seed status (1 = alive, 0 = dead);NA
+seedling_emergence.csv;emergence_date;Date of seed emergence;NA
+seedling_emergence.csv;death_date;Date of seedling death;NA
+seedling_emergence.csv;day_since_sown;Number of days passed since experiment installment (seeds was sown);NA
+seedling_emergence.csv;emerged_status;Status of seed emergence (1 = emerged, 0 = not emerged);NA
+seed_predators_escape.csv;id_plant;Individual plant identification number;NA
+seed_predators_escape.csv;predated.seeds;Total number of predated seeds found in seed trap;NA
+seed_predators_escape.csv;entire.seeds;Total number of intact seeds found in seed trap;NA
+seed_predators_escape.csv;entire.Chloris;Number of intact seeds attributed to Chloris chloris through DNA-barcoding;NA
+seed_predators_escape.csv;entire.Pyrrhula;Number of intact seeds attributed to Pyrrhula pyrrhula through DNA-barcoding;NA
+seed_predators_escape.csv;entire.Fringilla;Number of intact seeds attributed to Fringilla coelebs through DNA-barcoding;NA
+surv.mh.post.rds;mh;Microhabitat type (n=5);NA
+surv.mh.post.rds;surv.2019;Probability a seed emerges and survives its first summer estimated for 2018-19 fruiting season;NA
+surv.mh.post.rds;surv.2020;Probability a seed emerges and survives its first summer estimated for 2019-20 fruiting season;NA
+surv.mh.post.rds;surv.avg;Average probability a seed emerges and survives its first summer;NA
