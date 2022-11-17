@@ -84,13 +84,13 @@ Resulting dataset using the dataset above and generated using the codes below:
 
 -   *Dependency_distribution.rds* - Mutual dependency estimation between animals and plants using effectiveness values and their asymmetry.
 
--   *Effectiveness_correlation_slope_CI_sd.rds* - Standard deviation of the confidence interval for the correlation between the two-sided effectiveness values of individual *Pistacia lentiscus* plants.
+-   *Effectiveness_correlation_slope_CI_sd.rds* - Confidence interval for the regression model between the two-sided effectiveness values of individual *Pistacia lentiscus* plants - using only interactions with legitimate seed dispersers ("sd").
 
--   *Effectiveness_correlation_slope_CI.rds* - Confidence interval for the correlation between the two-sided effectiveness values of individual *Pistacia lentiscus* plants.
+-   *Effectiveness_correlation_slope_CI.rds* - Confidence interval for the regression model between the two-sided effectiveness values of individual *Pistacia lentiscus* plants - using interactions with all bird consumers.
 
--   *Effectiveness_correlation_slopes_sd.rds* - Standard deviation for the correlation between the two-sided effectiveness values of individual *Pistacia lentiscus* plants.
+-   *Effectiveness_correlation_slopes_sd.rds* - Slope values for the regression model between the two-sided effectiveness values of individual *Pistacia lentiscus* plants - using only interactions with legitimate seed dispersers ("sd").
 
--   *Effectiveness_correlation_slopes.rds* - Calculated correlation between the two-sided effectiveness values of individual *Pistacia lentiscus* plants.
+-   *Effectiveness_correlation_slopes.rds* - Slope values for the regression model between the two-sided effectiveness values of individual *Pistacia lentiscus* plants - using interactions with all bird consumers.
 
 -   *Effectiveness_plants_no_pred.rds* - Effectiveness estimation and subcomponents for individual plants without considering seed predator birds.
 
