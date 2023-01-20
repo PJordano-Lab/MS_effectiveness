@@ -4,7 +4,7 @@ Manuscript title: 'Reciprocity and interaction effectiveness in generalized mutu
 
 Authors: Elena Quintero, Francisco Rodríguez-Sánchez and Pedro Jordano.
 
-Link manuscript Ecology Letters: <https://doi.org/10.1111/ele.14141> (available soon)
+Link manuscript Ecology Letters: <https://doi.org/10.1111/ele.14141>
 
 Link preprint BioRxiv: <https://doi.org/10.1101/2022.03.23.485462>
 
