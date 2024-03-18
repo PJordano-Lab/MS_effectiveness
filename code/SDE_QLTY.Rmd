@@ -226,6 +226,19 @@ sde.qlt %>%
        caption = "Points represent the median. Intervals represent 0.66 and 0.95 credibility intervals")
 ```
 
+```{r}
+bird_sp_names <- read.csv2(here("../../EBD-PhD/Pistacia_effectiveness/data/bird_short.csv"))
+
+sde.qlt %>% left_join(bird_sp_names) %>%
+  ggplot() +
+  stat_pointinterval(aes(P.recruit, reorder(bird_sp_correct, P.recruit, FUN = median)), color = "grey30") +
+  theme(axis.text.y = element_text(face = "italic")) +
+  labs(x = "\nProbability of producing a recruit",
+       y = NULL)
+
+ggsave(here("../../EBD-PhD/Tesis/bckup/Chap2/SDE_QLC.pdf"), width = 6, height = 6)
+```
+
 
 ```{r}
 saveRDS(qlty, here("analysis", "output", "SDE_QLTY_mh.rds"))
